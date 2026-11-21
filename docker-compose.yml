@@ -1,0 +1,13 @@
+services:
+  rosy:
+    build: .
+    container_name: rosy-guard
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      - RUST_LOG=${RUST_LOG:-info,rosy=debug}
+      - NSFW_THRESHOLD=${NSFW_THRESHOLD:-0.75}
+      - GORE_THRESHOLD=${GORE_THRESHOLD:-0.75}
