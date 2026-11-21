@@ -1,12 +1,11 @@
-//! Message handling — with tiered false-positive safety + NSFW/Gore-only link filter
+//! Message handling — tiered safety + NSFW/Gore/Tor/Sus + beautiful embeds
 
 use std::{collections::HashSet, sync::Arc};
-use serenity::all::{ChannelId, CreateEmbed, CreateEmbedFooter, CreateMessage};
+use serenity::all::{ChannelId, CreateMessage, Message};
 use serenity::prelude::Context;
-use serenity::all::Message;
 use tracing::{error, info, warn};
 
-use crate::{config::{Config, Tier}, db::Db, moderation::{image_filter::ImageFilter, link_scanner::LinkScanner}, permissions, filterlist::FilterLists};
+use crate::{config::{Config, Tier}, db::Db, embeds, moderation::{image_filter::ImageFilter, link_scanner::LinkScanner}, permissions};
 
 pub struct ScanOutcome {
     pub violations: Vec<String>,
@@ -38,7 +37,6 @@ pub async fn handle_message(
     let gore_threshold = guild_cfg.gore_threshold.unwrap_or(global_config.gore_threshold);
     let nsfw_review = guild_cfg.nsfw_threshold.map(|t| (t - 0.10).max(0.0)).unwrap_or(global_config.nsfw_review_threshold);
     let gore_review = guild_cfg.gore_threshold.map(|t| (t - 0.10).max(0.0)).unwrap_or(global_config.gore_review_threshold);
-    let block_invites = guild_cfg.block_invites.unwrap_or(global_config.block_invites);
     let log_channel = guild_cfg.log_channel_id.or(global_config.log_channel_id);
     let delete = guild_cfg.delete_message.unwrap_or(global_config.delete_message);
     let warn_user = guild_cfg.send_warning.unwrap_or(global_config.send_warning);
@@ -57,17 +55,8 @@ pub async fn handle_message(
     }
     if guild_cfg.allow_in_nsfw_channels.unwrap_or(global_config.allow_in_nsfw_channels) && is_nsfw_channel { return None; }
 
-    // Link scanner already uses FilterLists (NSFW/Gore only) + merged allowlist + block_invites
-    // We need to ensure per-guild allowlist merged — our LinkScanner was built with global allowlist only
-    // So we rebuild effective allowed set and check via is_builtin_safe logic
-    // For now, we respect link_scanner's filterlists (NSFW/Gore) and guild allowlist via db
     let mut allowed = global_config.allowed_domains.clone();
     allowed.extend(guild_cfg.allowed_domains.clone());
-    // Reconstruct effective scanner if guild has extra allows
-    let effective_allowed = allowed.clone();
-    // We can't mutate Arc<LinkScanner> easily, so we create temporary check:
-    // If domain is in effective_allowed, we will treat link as allowed even if filterlist says blocked
-    // This is implemented by checking allowed set here before pushing violations
 
     let mut image_urls: Vec<String> = Vec::new();
     let mut text_to_scan = msg.content.clone();
@@ -86,17 +75,13 @@ pub async fn handle_message(
     let mut seen = HashSet::new();
     image_urls.retain(|u| seen.insert(u.clone()));
 
-    // Link scan — ONLY NSFW & Gore via GitHub filterlists (see filterlist.rs sources)
     let link_results = link_scanner.scan_text(&text_to_scan);
-    // Apply guild allowlist override (NSFW/Gore link should be allowed if explicitly allowlisted)
     let blocked_links: Vec<_> = link_results.iter().filter(|r| {
         if !r.blocked { return false; }
-        if effective_allowed.contains(&r.domain.to_ascii_lowercase()) { return false; }
-        // Also check host allowlist via extract_domain already handled, but double-check
+        if allowed.contains(&r.domain.to_ascii_lowercase()) { return false; }
         true
     }).cloned().collect();
 
-    // Image scan with tiered logic + safe-hash bypass
     let mut blocked_images = Vec::new();
     let mut review_images = Vec::new();
     for url in &image_urls {
@@ -114,30 +99,39 @@ pub async fn handle_message(
         if res.blocked && !blocked_images.iter().any(|b| b.url == res.url) && !review_images.iter().any(|b| b.url == res.url) { blocked_images.push(res); }
     }
 
-    let mut violations: Vec<String> = blocked_links.iter().map(|bl| format!("🔗 Blocked link `{}` — {} [{}]", bl.url, bl.reason, bl.category.clone().unwrap_or_else(|| "NSFW/Gore".into()))).collect();
-    violations.extend(blocked_images.iter().map(|ir| format!("🖼️ Blocked image <{}> — {} (hash `{}`)", ir.url, ir.reasons.join(", "), &ir.hash[..12.min(ir.hash.len())])));
-
-    let mut reviews: Vec<String> = review_images.iter().map(|ir| format!("🔍 Review image <{}> — {} (hash `{}`)", ir.url, ir.reasons.join(", "), &ir.hash[..12.min(ir.hash.len())])).collect();
+    // Build violations + categories for embed coloring
+    let mut violations: Vec<String> = Vec::new();
+    let mut v_categories: Vec<String> = Vec::new();
+    for bl in &blocked_links {
+        let cat = bl.category.clone().unwrap_or_else(|| "NSFW/Gore".into());
+        if !v_categories.contains(&cat) { v_categories.push(cat.clone()); }
+        violations.push(format!("`{}` — {} `({})`", bl.domain, bl.reason, cat));
+    }
+    for ir in &blocked_images {
+        let cat = if ir.nsfw_score >= nsfw_threshold { "NSFW" } else if ir.gore_score >= gore_threshold { "Gore" } else { "NSFW/Gore" };
+        if !v_categories.contains(&cat.to_string()) { v_categories.push(cat.to_string()); }
+        violations.push(format!("🖼️ <{}> — {} `hash:{}`", ir.url, ir.reasons.join(", "), &ir.hash[..12.min(ir.hash.len())]));
+    }
+    let mut reviews: Vec<String> = review_images.iter().map(|ir| format!("🔍 <{}> — {} `hash:{}`", ir.url, ir.reasons.join(", "), &ir.hash[..12.min(ir.hash.len())])).collect();
+    let r_categories = vec!["Review".to_string()];
 
     if violations.is_empty() && reviews.is_empty() { return None; }
-
     if !violations.is_empty() { info!(guild=%guild_id, channel=%msg.channel_id, author=%msg.author.tag(), "Block: {:?}", violations); }
     if !reviews.is_empty() { info!(guild=%guild_id, channel=%msg.channel_id, author=%msg.author.tag(), "Review: {:?}", reviews); }
+
+    let bot_avatar = ctx.cache.current_user().avatar_url();
 
     if let Some(log_channel_id) = log_channel {
         let log_id = ChannelId::new(log_channel_id);
         if !violations.is_empty() {
-            let description = violations.join("\n");
-            let footer_text = format!("User: {} ({}) | Action: BLOCK | Sources: blocklistproject/Lists (NSFW) + 0xDarkMatter/aegis-blocklist (Gore)", msg.author.tag(), msg.author.id);
-            let embed = CreateEmbed::new().title("Rosy Guard — violation blocked").description(&description).footer(CreateEmbedFooter::new(footer_text)).field("Channel", format!("<#{}>", msg.channel_id), true).field("Message ID", msg.id.to_string(), true).field("Scores", format!("NSFW {:.2}≥{:.2} | Gore {:.2}≥{:.2}", blocked_images.first().map(|r| r.nsfw_score).unwrap_or(0.0), nsfw_threshold, blocked_images.first().map(|r| r.gore_score).unwrap_or(0.0), gore_threshold), false).color(0xFF2D55);
-            let content = format!("**Violation** by {} in <#{}> — {}\n*Link filter: GitHub filterlists (NSFW: blocklistproject/Lists#porn.txt, Gore: aegis-blocklist#gore-shock.txt). False positive? `/rosy false_positive`.*", msg.author.mention(), msg.channel_id, description);
+            let scores_line = blocked_images.first().map(|r| format!("NSFW {:.2}≥{:.2} • Gore {:.2}≥{:.2} • Tor/Proxy via hagezi • Cheap-TLD via hagezi/spam-tlds", r.nsfw_score, nsfw_threshold, r.gore_score, gore_threshold));
+            let embed = embeds::block_embed(&msg.author, format!("<#{}>", msg.channel_id), &violations, &v_categories, scores_line, bot_avatar.clone());
+            let content = format!("**Violation** by {} in <#{}> • `{} • {}`\n*Link filter: GitHub — `blocklistproject/Lists` (NSFW) + `aegis-blocklist` (Gore) + `hagezi/dns-blocklists` (Tor & Cheap-TLD). False positive?* `/rosy false_positive`", msg.author.mention(), msg.channel_id, msg.id, chrono::Utc::now().format("%H:%M UTC"));
             if let Err(e) = log_id.send_message(&ctx.http, CreateMessage::new().content(content).embed(embed)).await { error!("Log failed: {:?}", e); }
         }
         if !reviews.is_empty() && enable_review_queue {
-            let description = reviews.join("\n");
-            let footer_text = format!("User: {} ({}) | Action: REVIEW (not deleted)", msg.author.tag(), msg.author.id);
-            let embed = CreateEmbed::new().title("Rosy Guard — review queue").description(&description).footer(CreateEmbedFooter::new(footer_text)).field("Channel", format!("<#{}>", msg.channel_id), true).field("Message ID", msg.id.to_string(), true).field("Scores", format!("Review thr NSFW {:.2} | Gore {:.2}", nsfw_review, gore_review), false).color(0xFFCC02);
-            let content = format!("**Needs review** by {} in <#{}> — kept, please check.", msg.author.mention(), msg.channel_id);
+            let embed = embeds::review_embed(&msg.author, format!("<#{}>", msg.channel_id), &reviews, &r_categories, bot_avatar.clone());
+            let content = format!("**Needs review** by {} in <#{}> • `{} • {}` — kept, please check.", msg.author.mention(), msg.channel_id, msg.id, chrono::Utc::now().format("%H:%M UTC"));
             if let Err(e) = log_id.send_message(&ctx.http, CreateMessage::new().content(content).embed(embed)).await { error!("Review log failed: {:?}", e); }
             let scores_json = serde_json::to_string(&reviews).unwrap_or_default();
             db.add_pending_review(guild_id.get(), msg.channel_id.get(), msg.author.id.get(), msg.id.get(), &reviews.join("; "), &scores_json);
@@ -148,8 +142,10 @@ pub async fn handle_message(
         if let Err(e) = msg.delete(&ctx.http).await { error!("Delete {} failed: {:?}", msg.id, e); } else { info!("Deleted {}", msg.id); db.log_action(guild_id.get(), msg.channel_id.get(), msg.author.id.get(), "delete", &violations.join("; ")); }
     }
     if !violations.is_empty() && warn_user {
-        let warning = format!("{}, your message was removed (high confidence NSFW/Gore violation):\n{}\n*Link sources: GitHub — blocklistproject/Lists & aegis-blocklist. If wrong, contact mod.*", msg.author.mention(), violations.join("\n"));
-        if let Err(e) = msg.channel_id.send_message(&ctx.http, CreateMessage::new().content(warning)).await { warn!("Warn failed: {:?}", e); }
+        let warn_embed = embeds::block_embed(&msg.author, format!("<#{}>", msg.channel_id), &violations, &v_categories, None, bot_avatar.clone());
+        // User-facing embed is cleaner: ephemeral-style but channel-visible with branded footer
+        let warning = CreateMessage::new().content(format!("{} your message was removed — high-confidence violation detected.", msg.author.mention())).embed(warn_embed);
+        if let Err(e) = msg.channel_id.send_message(&ctx.http, warning).await { warn!("Warn failed: {:?}", e); }
     }
     if !violations.is_empty() && timeout_secs > 0 {
         let until = chrono::Utc::now() + chrono::Duration::seconds(timeout_secs as i64);
