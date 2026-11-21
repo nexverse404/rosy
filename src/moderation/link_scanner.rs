@@ -48,11 +48,15 @@ impl LinkScanner {
     }
     pub fn extract_domain(&self, url: &str) -> String {
         let with_scheme = if url.starts_with("http://") || url.starts_with("https://") { url.to_string() } else { format!("https://{url}") };
-        let extractor = TldExtractor::new(tldextract::TldOption::Mozilla);
+        let extractor = TldExtractor::new(tldextract::TldOption::default());
         if let Ok(parsed) = url::Url::parse(&with_scheme) {
             if let Some(host) = parsed.host_str() {
                 if let Ok(t) = extractor.extract(host) {
-                    if !t.domain.is_empty() && !t.suffix.is_empty() { return format!("{}.{}", t.domain, t.suffix).to_ascii_lowercase(); }
+                    if let (Some(domain), Some(suffix)) = (t.domain.as_ref(), t.suffix.as_ref()) {
+                        if !domain.is_empty() && !suffix.is_empty() {
+                            return format!("{}.{}", domain, suffix).to_ascii_lowercase();
+                        }
+                    }
                 }
                 return host.to_ascii_lowercase();
             }
