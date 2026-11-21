@@ -5,7 +5,7 @@ use serenity::all::{GuildId, Member, Permissions, RoleId};
 /// Check if member can manage Rosy (Manage Guild or Administrator)
 pub fn can_configure(member: &Member, guild_id: GuildId, cache_roles: &std::collections::HashMap<RoleId, serenity::model::guild::Role>) -> bool {
     // Direct permission check via member.permissions (cached)
-    if let Some(perms) = member.permissions {
+    if let Some(perms) = member.permissions.as_ref() {
         return perms.manage_guild() || perms.administrator();
     }
     // Fallback: check roles

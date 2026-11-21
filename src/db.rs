@@ -153,9 +153,9 @@ impl Db {
             }
             let mut v: serde_json::Value = serde_json::from_str(&j).unwrap_or(serde_json::json!({}));
             if let serde_json::Value::Object(ref mut m) = v {
-                m.entry("guild_id").or_insert(serde_json::json!(guild_id));
+                m.entry("guild_id".to_string()).or_insert(serde_json::json!(guild_id));
                 for k in ["video_blocked_channels","video_allowed_channels","gender_block_male_channels","gender_block_female_channels"] {
-                    m.entry(k).or_insert(serde_json::json!([]));
+                    m.entry(k.to_string()).or_insert(serde_json::json!([]));
                 }
                 for k in ["block_videos","gender_block_male","gender_block_female"] {
                     if !m.contains_key(k) { m.insert(k.to_string(), serde_json::Value::Null); }
@@ -207,7 +207,7 @@ impl Db {
     /// Fast guild count for 100+ fleet health checks
     pub fn guild_count(&self) -> usize {
         let conn = match self.inner.lock() { Ok(c) => c, Err(_) => return 0 };
-        conn.query_row("SELECT COUNT(*) FROM guilds", [], |r| r.get(0)).unwrap_or(0)
+        conn.query_row("SELECT COUNT(*) FROM guilds", params![], |r| r.get(0)).unwrap_or(0)
     }
 }
 

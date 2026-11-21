@@ -7,7 +7,7 @@ use once_cell::sync::Lazy;
 use tldextract::TldExtractor;
 use crate::filterlist::FilterLists;
 
-static URL_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"https?://[^\s<>\"']+|www\.[^\s<>\"']+").expect("url regex"));
+static URL_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r#"https?://[^\s<>"']+|www\.[^\s<>"']+"#).expect("url regex"));
 static INVITE_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"discord\.gg/[a-zA-Z0-9]+|discord\.com/invite/[a-zA-Z0-9]+").expect("invite regex"));
 static ONION_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"([a-z2-7]{16,56}\.onion)\b").expect("onion regex"));
 
@@ -71,7 +71,8 @@ impl LinkScanner {
 
     pub fn is_blocked(&self, url: &str) -> (bool, String, Option<String>) {
         let domain = self.extract_domain(url);
-        let host = url::Url::parse(if url.starts_with("http") { url } else { &format!("https://{}", url) }).ok().and_then(|u| u.host_str().map(|h| h.to_ascii_lowercase())).unwrap_or_else(|| domain.clone());
+        let url_with_scheme = if url.starts_with("http") { url.to_string() } else { format!("https://{}", url) };
+        let host = url::Url::parse(&url_with_scheme).ok().and_then(|u| u.host_str().map(|h| h.to_ascii_lowercase())).unwrap_or_else(|| domain.clone());
         if self.is_cdn_url(url) { return (false, String::new(), None); }
         if self.is_builtin_safe(&host) || self.is_builtin_safe(&domain) {
             if self.block_invites && INVITE_RE.is_match(url) {
