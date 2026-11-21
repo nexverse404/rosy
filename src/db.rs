@@ -1,4 +1,5 @@
 //! SQLite persistence for per-guild config + false-positive safety
+//! Tuned for 100+ guilds: WAL + indices + busy timeout
 
 use std::{collections::HashSet, path::Path, sync::{Arc, Mutex}};
 use rusqlite::{params, Connection, OptionalExtension};
@@ -21,13 +22,11 @@ pub struct GuildConfig {
     pub send_warning: Option<bool>,
     pub timeout_duration_seconds: Option<u64>,
     pub allow_in_nsfw_channels: Option<bool>,
-    // ── Video blocking ──
     pub block_videos: Option<bool>,
     #[serde(default)]
     pub video_blocked_channels: HashSet<u64>,
     #[serde(default)]
     pub video_allowed_channels: HashSet<u64>,
-    // ── Per-channel gender filter ──
     #[serde(default)]
     pub gender_block_male_channels: HashSet<u64>,
     #[serde(default)]
@@ -76,7 +75,6 @@ impl GuildConfig {
         false
     }
     pub fn blocks_videos_in(&self, channel_id: u64, global_default: bool) -> bool {
-        // Per-channel allow overrides global block
         if self.video_allowed_channels.contains(&channel_id) { return false; }
         if self.video_blocked_channels.contains(&channel_id) { return true; }
         if let Some(v) = self.block_videos { return v; }
@@ -116,13 +114,16 @@ impl Db {
         let p = path.as_ref();
         if let Some(parent) = p.parent() { let _ = std::fs::create_dir_all(parent); }
         let conn = Connection::open(p).map_err(|e| format!("open db: {e}"))?;
+        // 100+ guilds: WAL allows concurrent readers while one writer holds lock; busy_timeout avoids SQLITE_BUSY
+        let _ = conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON;");
         let db = Self { inner: Arc::new(Mutex::new(conn)) };
         db.migrate()?;
-        info!("Opened DB at {}", p.display());
+        info!("Opened DB at {} (WAL, 100+ guild ready)", p.display());
         Ok(db)
     }
     pub fn open_in_memory() -> Result<Self, String> {
         let conn = Connection::open_in_memory().map_err(|e| format!("open mem db: {e}"))?;
+        let _ = conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=5000;");
         let db = Self { inner: Arc::new(Mutex::new(conn)) };
         db.migrate()?;
         Ok(db)
@@ -135,6 +136,11 @@ impl Db {
             CREATE TABLE IF NOT EXISTS safe_hashes (hash TEXT PRIMARY KEY, guild_id INTEGER NOT NULL, approved_by INTEGER NOT NULL, reason TEXT, created_at TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS feedback (id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id INTEGER NOT NULL, message_id INTEGER, hash TEXT, was_blocked INTEGER NOT NULL, is_false_positive INTEGER NOT NULL, reporter INTEGER, created_at TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS pending_reviews (id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id INTEGER NOT NULL, channel_id INTEGER NOT NULL, user_id INTEGER NOT NULL, message_id INTEGER NOT NULL, reason TEXT NOT NULL, scores_json TEXT NOT NULL, created_at TEXT NOT NULL);
+            CREATE INDEX IF NOT EXISTS idx_guilds_id ON guilds(guild_id);
+            CREATE INDEX IF NOT EXISTS idx_audit_guild ON audit_log(guild_id, created_at);
+            CREATE INDEX IF NOT EXISTS idx_feedback_guild ON feedback(guild_id, created_at);
+            CREATE INDEX IF NOT EXISTS idx_pending_guild ON pending_reviews(guild_id, created_at);
+            CREATE INDEX IF NOT EXISTS idx_hash_guild ON safe_hashes(hash, guild_id);
             "#).map_err(|e| format!("migrate: {e}"))?;
         Ok(())
     }
@@ -142,15 +148,12 @@ impl Db {
         let conn = self.inner.lock().unwrap();
         let json: Option<String> = conn.query_row("SELECT config_json FROM guilds WHERE guild_id = ?1", [guild_id as i64], |r| r.get(0)).optional().map_err(|e| format!("query guild: {e}"))?;
         if let Some(j) = json {
-            // Lenient: try strict, then lenient with defaults
             if let Ok(mut cfg) = serde_json::from_str::<GuildConfig>(&j) {
                 cfg.guild_id = guild_id; return Ok(cfg);
             }
-            // Try with serde_json Value merging defaults
             let mut v: serde_json::Value = serde_json::from_str(&j).unwrap_or(serde_json::json!({}));
             if let serde_json::Value::Object(ref mut m) = v {
                 m.entry("guild_id").or_insert(serde_json::json!(guild_id));
-                // Fill missing new fields
                 for k in ["video_blocked_channels","video_allowed_channels","gender_block_male_channels","gender_block_female_channels"] {
                     m.entry(k).or_insert(serde_json::json!([]));
                 }
@@ -200,6 +203,11 @@ impl Db {
         let conn = match self.inner.lock() { Ok(c) => c, Err(_) => return };
         let now = chrono::Utc::now().to_rfc3339();
         let _ = conn.execute("INSERT INTO pending_reviews (guild_id, channel_id, user_id, message_id, reason, scores_json, created_at) VALUES (?1,?2,?3,?4,?5,?6,?7)", params![guild_id as i64, channel_id as i64, user_id as i64, message_id as i64, reason, scores_json, now]);
+    }
+    /// Fast guild count for 100+ fleet health checks
+    pub fn guild_count(&self) -> usize {
+        let conn = match self.inner.lock() { Ok(c) => c, Err(_) => return 0 };
+        conn.query_row("SELECT COUNT(*) FROM guilds", [], |r| r.get(0)).unwrap_or(0)
     }
 }
 
