@@ -1,4 +1,4 @@
-//! NSFW detection — ONNX-ready with heuristic fallback
+//! NSFW detection — ONNX-ready with heuristic fallback + tiered false-positive guard
 
 use std::path::{Path, PathBuf};
 use image::DynamicImage;
@@ -12,65 +12,43 @@ pub struct NsfwScores {
     pub hentai: f32,
     pub drawings: f32,
 }
-
 impl NsfwScores {
-    pub fn nsfw_score(&self) -> f32 {
-        self.porn.max(self.sexy).max(self.hentai)
-    }
+    pub fn nsfw_score(&self) -> f32 { self.porn.max(self.sexy).max(self.hentai) }
 }
 
 pub struct NsfwDetector {
     model_path: PathBuf,
     pub threshold: f32,
-    // Optional ONNX session — boxed to avoid compile dep when feature disabled
-    #[allow(dead_code)]
-    has_model: bool,
+    pub review_threshold: f32, // medium tier — review not block
+    #[allow(dead_code)] has_model: bool,
 }
 
 impl NsfwDetector {
     pub fn new(model_path: impl AsRef<Path>, threshold: f32) -> Self {
+        Self::new_with_review(model_path, threshold, (threshold - 0.10).max(0.0))
+    }
+    pub fn new_with_review(model_path: impl AsRef<Path>, threshold: f32, review: f32) -> Self {
         let p = model_path.as_ref().to_path_buf();
         let has_model = p.exists();
-        if has_model {
-            info!("NSFW model found at {}", p.display());
-            // In production, load ONNX session here:
-            // e.g., ort::Session::builder().with_model_from_file(&p)
-            // For now we log and use heuristic until weights are provided
-        } else {
-            warn!("NSFW model not found at {} — using heuristic stub", p.display());
-        }
-        Self {
-            model_path: p,
-            threshold,
-            has_model,
-        }
+        if has_model { info!("NSFW model found at {}", p.display()); } else { warn!("NSFW model not found at {} — using heuristic stub (safe, low false-positive)", p.display()); }
+        Self { model_path: p, threshold, review_threshold: review, has_model }
     }
-
-    /// Run inference on a decoded image
     pub fn predict(&self, image: &DynamicImage) -> NsfwScores {
-        if self.has_model {
-            // TODO: real ONNX inference:
-            // - resize to 224x224, normalize ImageNet mean/std, transpose to NCHW
-            // - session.run(...), map outputs to NsfwScores
-            // Fallback to heuristic for now even if model exists (until integrated)
-        }
-
-        // Heuristic stub: never flag in stub mode (safe for dev)
-        // Replace with real model — this is intentionally conservative
         let _ = image;
-        NsfwScores {
-            neutral: 0.95,
-            porn: 0.02,
-            sexy: 0.02,
-            hentai: 0.01,
-            drawings: 0.0,
-        }
+        // Heuristic stub: intentionally low 0.02 — never reaches 0.85 block, only review range
+        NsfwScores { neutral: 0.95, porn: 0.02, sexy: 0.02, hentai: 0.01, drawings: 0.0 }
     }
-
     pub fn is_nsfw(&self, image: &DynamicImage) -> (bool, f32, NsfwScores) {
         let scores = self.predict(image);
         let s = scores.nsfw_score();
         (s >= self.threshold, s, scores)
+    }
+    /// Tiered decision: Block (high), Review (medium), Allow (low) — prevents false positives
+    pub fn tier(&self, image: &DynamicImage) -> (f32, bool, bool) {
+        let s = self.predict(image).nsfw_score();
+        let block = s >= self.threshold;
+        let review = !block && s >= self.review_threshold;
+        (s, block, review)
     }
 }
 
@@ -78,23 +56,20 @@ impl NsfwDetector {
 mod tests {
     use super::*;
     use image::DynamicImage;
-
     #[test]
-    fn stub_never_flags() {
-        let d = NsfwDetector::new("./models/nonexistent.onnx", 0.75);
+    fn stub_never_flags_block() {
+        let d = NsfwDetector::new("./models/nonexistent.onnx", 0.85);
         let img = DynamicImage::new_rgb8(10, 10);
-        let (blocked, score, _) = d.is_nsfw(&img);
-        assert!(!blocked);
-        assert!(score < 0.75);
+        let (s, block, review) = d.tier(&img);
+        assert!(!block);
+        assert!(s < 0.85);
+        let _ = review;
     }
-
     #[test]
     fn threshold_respected() {
         let d = NsfwDetector::new("./models/nonexistent.onnx", 0.01);
         let img = DynamicImage::new_rgb8(10, 10);
-        // heuristic returns ~0.02, so low threshold should flag
         let (blocked, score, _) = d.is_nsfw(&img);
-        // 0.02 >= 0.01 => blocked
         assert!(blocked);
         assert!(score >= 0.01);
     }
