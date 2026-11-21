@@ -1,9 +1,10 @@
 //! Rosy Guard — Discord moderation bot (Rust + Serenity)
-//! Blocks gender-specific images, NSFW and gore photos and links — with false-positive safety.
+//! Blocks gender-specific images, NSFW and gore photos and links — link filter via GitHub filterlists.
 
 mod commands;
 mod config;
 mod db;
+mod filterlist;
 mod handlers;
 mod moderation;
 mod permissions;
@@ -15,11 +16,13 @@ use tracing::{error, info, warn};
 
 use config::Config;
 use db::Db;
+use filterlist::{FilterListManager, FilterLists};
 use moderation::{gore_detector::GoreDetector, image_filter::ImageFilter, link_scanner::LinkScanner, nsfw_detector::NsfwDetector};
 
 struct Handler {
     config: Config,
     db: Db,
+    filterlists: FilterListManager,
     image_filter: Arc<ImageFilter>,
     link_scanner: Arc<LinkScanner>,
     http_client: reqwest::Client,
@@ -48,11 +51,23 @@ impl EventHandler for Handler {
             if let Err(e) = guild_id.create_command(&ctx.http, cmd).await { warn!("Register cmd for {} failed: {:?}", guild_id, e); }
         }
         let _ = self.db.get_guild(guild_id.get());
-        info!("Guild {} ({} members) — thresholds NSFW {:.2}/review {:.2} | Gore {:.2}/review {:.2}", guild.name, guild.member_count, self.config.nsfw_threshold, self.config.nsfw_review_threshold, self.config.gore_threshold, self.config.gore_review_threshold);
+        let fl = self.filterlists.get();
+        info!("Guild {} ({} members) — filterlists NSFW {} Gore {} | thr NSFW {:.2}/{:.2} Gore {:.2}/{:.2}", guild.name, guild.member_count, fl.nsfw_count, fl.gore_count, self.config.nsfw_threshold, self.config.nsfw_review_threshold, self.config.gore_threshold, self.config.gore_review_threshold);
     }
     async fn ready(&self, ctx: Context, ready: Ready) {
-        info!("{} connected — {} guilds — false-positive safe: block ≥0.85, review 0.75–0.85 → mod queue", ready.user.name, ready.guilds.len());
+        let fl = self.filterlists.get();
+        info!("{} connected — {} guilds — NSFW:{} Gore:{} — block ≥0.85 review 0.75–0.85", ready.user.name, ready.guilds.len(), fl.nsfw_count, fl.gore_count);
         for cmd in commands::register_commands() { if let Err(e) = serenity::all::Command::create_global_command(&ctx.http, cmd).await { warn!("Global cmd failed: {:?}", e); } }
+        // Spawn background refresh of filterlists every 24h (first refresh in 60s)
+        let mgr = self.filterlists.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(86400));
+            loop {
+                interval.tick().await;
+                if let Err(e) = mgr.refresh_once().await { warn!("Filterlist refresh failed: {}", e); } else { info!("Filterlists refreshed from GitHub"); }
+            }
+        });
         let _ = ctx;
     }
     async fn cache_ready(&self, _ctx: Context, guilds: Vec<GuildId>) { info!("Cache ready — {} guilds", guilds.len()); }
@@ -65,14 +80,20 @@ async fn main() {
     if let Err(e) = config.validate() { error!("Invalid config: {}", e); std::process::exit(1); }
     let db_path = std::env::var("DATABASE_PATH").unwrap_or_else(|_| "./data/rosy.db".into());
     let db = Db::open(&db_path).unwrap_or_else(|e| { error!("DB open {} failed: {} → in-memory", db_path, e); Db::open_in_memory().expect("mem db") });
-    info!(nsfw_block=config.nsfw_threshold, nsfw_review=config.nsfw_review_threshold, gore_block=config.gore_threshold, gore_review=config.gore_review_threshold, gender_thr=config.gender_threshold, skip_tiny=config.skip_tiny_images, review_queue=config.enable_review_queue, db=%db_path, "Starting Rosy Guard 🌹 — false-positive safe");
+
+    // Load filterlists from bundled GitHub repos (blocklistproject + aegis-blocklist)
+    let filterlists_mgr = FilterListManager::new();
+    let fl = filterlists_mgr.get();
+    info!(nsfw_block=config.nsfw_threshold, nsfw_review=config.nsfw_review_threshold, gore_block=config.gore_threshold, gore_review=config.gore_review_threshold, nsfw_count=fl.nsfw_count, gore_count=fl.gore_count, nsfw_src=%fl.nsfw_source, gore_src=%fl.gore_source, db=%db_path, "Starting Rosy Guard 🌹 — link filter via GitHub filterlists (NSFW/Gore only)");
+
     let nsfw = NsfwDetector::new_with_review(&config.nsfw_model_path, config.nsfw_threshold, config.nsfw_review_threshold);
     let gore = GoreDetector::new_with_review(&config.gore_model_path, config.gore_threshold, config.gore_review_threshold);
     let image_filter = Arc::new(ImageFilter::new(nsfw, gore, config.block_gender_images).with_gender_threshold(config.gender_threshold).with_skip_tiny(config.skip_tiny_images));
-    let link_scanner = Arc::new(LinkScanner::new(config.blocked_domains.clone(), config.allowed_domains.clone(), config.block_invites));
-    let http_client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(10)).user_agent("rosy-guard/0.1 (+https://github.com/nexverse404/rosy) — false-positive safe").build().expect("http client");
+    // Link scanner now blocks ONLY NSFW & Gore domains from GitHub filterlists
+    let link_scanner = Arc::new(LinkScanner::new(fl.clone(), config.allowed_domains.clone(), config.block_invites));
+    let http_client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(15)).user_agent("rosy-guard/0.1 (+https://github.com/nexverse404/rosy) — filterlists: blocklistproject/Lists + aegis-blocklist").build().expect("http client");
     let intents = GatewayIntents::GUILD_MESSAGES | GatewayIntents::MESSAGE_CONTENT | GatewayIntents::GUILDS | GatewayIntents::GUILD_MEMBERS;
-    let handler = Handler { config: config.clone(), db, image_filter, link_scanner, http_client };
+    let handler = Handler { config: config.clone(), db, filterlists: filterlists_mgr, image_filter, link_scanner, http_client };
     let mut client = Client::builder(&config.discord_token, intents).event_handler(handler).await.expect("client");
     if let Err(why) = client.start().await { error!("Client error: {:?}", why); }
 }

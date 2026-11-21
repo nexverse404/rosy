@@ -2,7 +2,7 @@
 
 **Rosy Guard is a Discord Bot written in Rust that blocks gender-specific images, NSFW and gore photos and links.**
 
-> Privacy-first, async moderation powered by [Serenity](https://github.com/serenity-rs/serenity) + Tokio — every message, edit, attachment, embed and URL is scanned before it reaches your community.
+> Privacy-first, async moderation — **link filter blocks *only* NSFW & Gore sites via curated GitHub filterlists**, every attachment/edit/URL scanned via Rust + Serenity.
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](./LICENSE)
 [![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=flat&logo=rust&logoColor=white)](https://www.rust-lang.org)
@@ -12,101 +12,95 @@
 ## ✨ Features — Complete Moderation Suite
 
 ### 🖼️ Image Moderation (Rust-native)
-- **NSFW Detection** — ONNX-ready classifier (NudeNet-compatible) with heuristic fallback; score ≥ guild threshold → block. Global `NSFW_THRESHOLD` overridable per-guild via `/rosy config`.
-- **Gore & Violence Filter** — separate ONNX model for blood/gore/violence; independent threshold.
-- **Gender-Specific Image Blocking** — **opt-in, policy-driven, disabled by default**. Requires explicit `/rosy config block_gender_images:true` + bias/privacy audit. Stubbed to never over-block when enabled without a vetted model.
-- **Real-time, In-Memory Only** — `reqwest` 10 MB cap + 10s timeout → `image::load_from_memory` → detectors. Bytes dropped after scan, never persisted.
+- **NSFW Detection** — ONNX-ready (NudeNet) with heuristic fallback; `Block ≥0.85`, `Review 0.75–0.85` → mod queue, `<0.75` allow
+- **Gore & Violence Filter** — separate ONNX model, same tiered thresholds
+- **Gender-Specific Blocking** — **off by default**, needs `block_gender_images:true` + `0.90` thr + bias audit; stub never blocks
+- **In-Memory Only** — `reqwest` 10MB/10s → `image::load_from_memory` → scores → drop, SHA256 logged for allowlist
 
-### 🔗 Link Protection
-- **Domain Blocklist/Allowlist** — merged global (`.env`) + per-guild (`/rosy block_domain`, `/rosy allow_domain`). Allowlist always wins.
-- **Invite & Spam Filtering** — `discord.gg` / `discord.com/invite` detection, toggleable per-guild.
-- **URL Extraction** — regex + `tldextract` registrable domain (Mozilla PSL) for accurate `bad.example` vs `good.bad.example` handling.
-- **Reputation Hook** — `check_url_reputation` stub for Google Safe Browsing / PhishTank with caching layer.
+### 🔗 Link Protection — NSFW & Gore *Only* (GitHub Filterlists)
+- **Curated Sources, not arbitrary blocklist:**
+  - **NSFW/Porn:** [`blocklistproject/Lists`](https://github.com/blocklistproject/Lists) — `porn.txt` (953k domains, MIT, daily updated). Upstream: `raw.githubusercontent.com/blocklistproject/Lists/master/porn.txt` + API `api.github.com/repos/blocklistproject/Lists/contents/porn.txt`
+  - **Gore/Shock:** [`0xDarkMatter/aegis-blocklist`](https://github.com/0xDarkMatter/aegis-blocklist) — `categories/gore-shock.txt` (15 domains, MIT, child-safety curated) + `adult-content/services/ai-adult` for NSFW supplement
+- **Behavior:** `is_blocked(domain)` checks **only** these NSFW/Gore sets + `discord.gg` invites (if enabled). Common safe domains (`cdn.discordapp.com`, `github.com`, `tenor.com`, `giphy.com`, `wikipedia.org`…) are **hard-allowed** even if lists contain them
+- **URL Parsing:** regex `URL_RE` + `INVITE_RE` + `tldextract` Mozilla PSL for `bad.example` vs `good.bad.example`
+- **Live Refresh:** `FilterListManager` loads `data/filterlists/nsfw.txt` + `gore.txt` bundled snapshots at startup, then spawns 60s→24h background task fetching via `api.github.com` + `codeload.github.com` (allowed hosts), caching to `data/filterlists/*-live.txt`
 
 ### ⚙️ Server Controls & Persistence
-- **Per-Guild SQLite Store** (`rusqlite`, `data/rosy.db`) — guild config, blocked/allowed domains, exempt roles/channels, audit log. Auto-migrates, survives restarts.
-- **Slash Commands** — `/rosy status`, `/rosy config`, `/rosy log_channel`, `/rosy block_domain`, `/rosy allow_domain`, `/rosy exempt_role`, `/rosy exempt_channel`, `/rosy help`, `/rosy_test`.
-- **Exemptions** — per-role, per-channel, and **NSFW-channel bypass** (`allow_in_nsfw_channels`). Checked before any scan.
-- **Actions** — delete + ephemeral warning + timeout (`TIMEOUT_DURATION_SECONDS`, escalating) + structured mod-log embed + SQLite `audit_log`.
-- **Edit Handling** — `message_update` re-fetches and re-scans edited messages (prevents bypass via “post clean, edit dirty”).
-
-### 🔐 Permissions & Safety
-- Only **Manage Guild / Administrator** can configure Rosy.
-- `message.content` intent + `GUILD_MEMBERS` for accurate member/role resolution.
-- Privacy: images never written to disk; only scores/reasons + `guild_id/channel_id/user_id/action/reason/timestamp` logged.
+- **Per-Guild SQLite** (`data/rosy.db`, `rusqlite`) — guild thresholds, allowlist, exempt roles/channels, `safe_hashes`, `audit_log`, `pending_reviews`
+- **Slash Commands:** `/rosy status/config/log_channel/block_domain/allow_domain/unblock/exempt_role/exempt_channel/false_positive/allow_hash/help` + `/rosy_test`
+- **Exemptions:** per-role, per-channel, NSFW-channel bypass — checked before scan
+- **Actions:** delete + warn + timeout + mod-log embed + DB audit; `Review` tier only logs to review queue (kept)
+- **Edit Handling:** `message_update` re-fetches & re-scans
 
 ---
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Rust 1.75+ (`rustup` recommended)
-- Discord Bot Token — https://discord.com/developers/applications → Bot → Reset Token
-  - Enable **Message Content Intent**, **Server Members Intent**, **Guilds**
+- Rust 1.75+ (`rustup`)
+- Discord Bot Token — https://discord.com/developers/applications → Bot → Reset Token (enable **Message Content**, **Server Members**, **Guilds**)
 
-### Run (development)
+### Run
 
 ```bash
 git clone https://github.com/nexverse404/rosy.git
 cd rosy
 cp .env.example .env
-# edit .env → DISCORD_TOKEN=..., LOG_CHANNEL_ID=..., etc.
+# edit .env → DISCORD_TOKEN=..., LOG_CHANNEL_ID=...
 cargo run
+# filterlists: bundled data/filterlists/nsfw.txt (5k sample) + gore.txt loaded instantly,
+# full lists refreshed from GitHub via api.github.com in background
 ```
 
-### Release build
+### Release / Docker
 
 ```bash
-cargo build --release
-./target/release/rosy  # uses ./data/rosy.db by default
-```
-
-### Docker
-
-```bash
-docker compose up --build -d
-docker logs -f rosy-guard
+cargo build --release && ./target/release/rosy
+docker compose up --build -d && docker logs -f rosy-guard
 ```
 
 ---
 
 ## 🔧 Configuration
 
-### Global (.env) — defaults for every new guild
+### Global (.env) — defaults for new guilds
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DISCORD_TOKEN` | — | Bot token (required) |
-| `LOG_CHANNEL_ID` | — | Global log channel (overridden per-guild) |
-| `NSFW_THRESHOLD` | `0.75` | NSFW confidence 0.0–1.0 |
-| `GORE_THRESHOLD` | `0.75` | Gore confidence |
-| `BLOCK_GENDER_IMAGES` | `false` | Gender filter (off by default) |
-| `BLOCK_INVITES` | `true` | Block discord.gg invites |
-| `BLOCKED_DOMAINS` | — | `bad.example,evil.com` |
-| `ALLOWED_DOMAINS` | — | `discord.com,github.com` (overrides block) |
-| `DELETE_MESSAGE` | `true` | Delete violating messages |
-| `SEND_WARNING` | `true` | Ephemeral warning reply |
-| `TIMEOUT_DURATION_SECONDS` | `300` | Timeout on violation (0 = disable) |
-| `ALLOW_IN_NSFW_CHANNELS` | `false` | Bypass in NSFW-marked channels |
-| `DATABASE_PATH` | `./data/rosy.db` | SQLite path |
-| `RUST_LOG` | `info,rosy=debug` | Tracing filter |
+| `LOG_CHANNEL_ID` | — | Global log channel |
+| `NSFW_THRESHOLD` | `0.85` | Block if score ≥0.85 |
+| `NSFW_REVIEW_THRESHOLD` | `0.75` | Review if 0.75–0.85 |
+| `GORE_THRESHOLD` | `0.85` | Gore block |
+| `GORE_REVIEW_THRESHOLD` | `0.75` | Gore review |
+| `GENDER_THRESHOLD` | `0.90` | Gender (very conservative) |
+| `BLOCK_GENDER_IMAGES` | `false` | Off by default |
+| `BLOCK_INVITES` | `true` | Block discord.gg |
+| `ALLOWED_DOMAINS` | — | `discord.com,github.com` (wins over filterlist) |
+| `DELETE_MESSAGE` | `true` | Delete on Block |
+| `SEND_WARNING` | `true` | Warn user |
+| `TIMEOUT_DURATION_SECONDS` | `300` | Timeout on Block |
+| `ALLOW_IN_NSFW_CHANNELS` | `false` | Bypass NSFW channels |
+| `SKIP_TINY_IMAGES` | `true` | Skip <64px emoji |
+| `ENABLE_REVIEW_QUEUE` | `true` | Review tier → mod queue |
+| `DATABASE_PATH` | `./data/rosy.db` | SQLite |
+| `RUST_LOG` | `info,rosy=debug` | Tracing |
 
-### Per-Guild (slash commands, stored in SQLite)
+### Per-Guild (SQLite, via slash)
 
 ```
-/rosy status                                  # view current effective config
-/rosy config nsfw_threshold:0.8 gore_threshold:0.7 block_gender_images:false allow_in_nsfw_channels:true
+/rosy status
+/rosy config nsfw_threshold:0.85 gore_threshold:0.90 block_gender_images:false
 /rosy log_channel channel:#mod-logs
-/rosy block_domain domain:bad.example
-/rosy allow_domain domain:discord.com
-/rosy unblock_domain domain:bad.example
+/rosy block_domain domain:bad.example  # extra NSFW/Gore override (rare)
+/rosy allow_domain domain:discord.com   # unblock even if in filterlist
 /rosy exempt_role role:@Moderator
 /rosy exempt_channel channel:#art-share
-/rosy help                                   # how decisions are made
-/rosy_test url:https://example.com           # test a URL (admin only)
+/rosy false_positive hash:abc123 reason:safe-art
+/rosy allow_hash hash:<64-char-sha256>
+/rosy help
+/rosy_test url:https://example.com
 ```
-
-Exemptions are checked in order: NSFW-channel bypass → exempt role → exempt channel → scan.
 
 ---
 
@@ -114,83 +108,59 @@ Exemptions are checked in order: NSFW-channel bypass → exempt role → exempt 
 
 ```
 rosy/
-├── Cargo.toml               # GPL-3.0, dual authors, rusqlite + chrono
+├── Cargo.toml
+├── data/filterlists/
+│   ├── nsfw.txt          # 5k sample from blocklistproject/Lists#porn.txt (full 953k via API refresh)
+│   ├── gore.txt          # 15 from aegis-blocklist#gore-shock.txt
+│   └── README.md         # source docs + update instructions
 ├── src/
-│   ├── main.rs              # Tokio entry, Handler (message, message_update, interaction_create, guild_create, ready)
-│   ├── config.rs            # Env loader with validation
-│   ├── db.rs                # SQLite per-guild config + audit log
-│   ├── permissions.rs       # Manage Guild check + is_exempt logic
-│   ├── commands.rs          # /rosy slash command registration & handlers
-│   ├── handlers.rs          # Unified handle_message (exempt → link → image → actions)
+│   ├── main.rs           # Tokio + Handler (message, message_update, interaction_create, guild_create, ready)
+│   ├── config.rs         # Tiered thresholds (Block/Review/Allow)
+│   ├── filterlist.rs     # FilterLists + FilterListManager (GitHub API/codeload fetch, hosts/plain parse, bundled fallback)
+│   ├── db.rs             # SQLite (guilds, safe_hashes, feedback, pending_reviews)
+│   ├── permissions.rs    # Manage Guild guard + is_exempt
+│   ├── commands.rs       # /rosy suite + false_positive/allow_hash
+│   ├── handlers.rs       # handle_message (exempt → link (NSFW/Gore only) → image tiered → actions)
 │   ├── moderation/
-│   │   ├── mod.rs
-│   │   ├── image_filter.rs  # fetch (10MB/10s) → decode → nsfw/gore/gender → ImageScanResult
-│   │   ├── nsfw_detector.rs # ONNX-ready, heuristic stub, threshold tests
-│   │   ├── gore_detector.rs # ONNX-ready, heuristic stub
-│   │   └── link_scanner.rs  # URL_RE + INVITE_RE, tldextract, is_blocked, scan_text
-│   └── utils/
-│       ├── mod.rs
-│       └── logger.rs        # tracing_subscriber EnvFilter
-├── Dockerfile               # multi-stage rust:1.78 → debian:bookworm-slim
-├── docker-compose.yml
+│   │   ├── image_filter.rs  # SHA256 + tiny skip + tiered Block/Review
+│   │   ├── nsfw_detector.rs # ONNX-ready, tier()
+│   │   ├── gore_detector.rs
+│   │   └── link_scanner.rs  # ONLY NSFW/Gore via FilterLists + BUILTIN_SAFE_DOMAINS + CDN exemption
+│   └── utils/logger.rs
+├── Dockerfile
 └── .env.example
 ```
 
 ---
 
-## 🛡️ How It Works — End-to-End
+## 🛡️ How Link Filter Works (NSFW/Gore Only)
 
-1. **Gateway** — Serenity `Handler` with `GUILD_MESSAGES | MESSAGE_CONTENT | GUILDS | GUILD_MEMBERS`. On `guild_create`, registers guild-scoped slash commands for instant availability + ensures DB row.
-2. **Message** — `message` + `message_update` (edit) both route to `handlers::handle_message`. Steps:
-   - Resolve `GuildConfig` from `Db` (falls back to global `Config`).
-   - Merge `blocked_domains` / `allowed_domains` (global ∪ guild) and build effective `LinkScanner`.
-   - Collect `image_urls` from `attachment.url` (content-type `image/*`), `embed.image/thumbnail/url`, and inline image links; dedupe.
-   - **Link scan** → `blocked_links`.
-   - **Image scan** → per URL `fetch → decode → detectors` (NSFW/Gore + gender stub), re-evaluate scores against *effective* per-guild thresholds (not just global).
-   - If violations, build mod-log `CreateEmbed`, send to `log_channel` (guild override or global), `delete`, `warn` (ephemeral-style), `timeout` (`chrono::Utc::now + duration`), and `audit_log` row.
-3. **Interactions** — `interaction_create` dispatches `/rosy` subcommands to `commands::handle_interaction` with `Manage Guild` guard, updating `Db` and replying ephemeral.
-4. **Privacy** — images as `Vec<u8>` → `DynamicImage` → scores → drop; no file writes. Only `guild_id/channel_id/user_id/action/reason/timestamp` persisted.
-
-Gender-specific filtering is documented as high-risk: disabled globally and per-guild by default, requires explicit opt-in, and in production must be a vetted face/gender model with bias testing — current stub logs and **never blocks** to prevent accidental harm.
+1. **Startup:** `FilterListManager::new()` loads `data/filterlists/nsfw.txt` + `gore.txt` (bundled snapshots of the two GitHub repos) into `HashSet`s — instant, offline-safe
+2. **Background refresh:** 60s after `ready`, then every 86400s, `refresh_once()` fetches via `https://api.github.com/repos/.../contents/...` + blob API (fallback `codeload.github.com` zip) — parses both `0.0.0.0 domain` hosts format and plain domain lists, updates `RwLock<FilterLists>`, caches to `*-live.txt`
+3. **Scan:** `link_scanner.is_blocked(url)` → `extract_domain` via `tldextract` → `is_cdn_url`? skip → `is_builtin_safe`? allow → `allowed_domains`? allow → `filterlists.is_blocked(domain)`? → `Some("NSFW"/"Gore")` → blocked with reason `NSFW domain: x (source: blocklistproject/Lists#porn.txt)`
+4. **False-positive safety:** safe domains hard-allowed, CDN exempt, tiny images skipped, `Review` tier not deleted, SHA256 allowlist
 
 ---
 
 ## 🧪 Testing
 
 ```bash
-cargo test                    # link_scanner, detectors, db roundtrip
 cargo test -- --nocapture
-cargo clippy -- -D warnings
-cargo fmt --check
+# link_scanner: builtin_safe_not_blocked, blocks_only_nsfw_gore, cdn_skip
+# filterlist: parse_hosts_format, parse_aegis_format, bundled_loads
+# image_filter: tiny_skipped, hash_deterministic
 ```
-
-Tests cover: allowlist overrides blocklist, invite blocking, dedupe, threshold respect, DB upsert/roundtrip, image decode.
-
----
-
-## 🤝 Contributing
-
-1. Fork → `git checkout -b feature/amazing`
-2. `cargo fmt && cargo clippy`
-3. Commit with clear messages (authored as `nexverse404` on GitHub; canonical `2pineapples` on GitLab)
-4. Open a PR
 
 ---
 
 ## 📜 License
 
-Licensed under **GPL-3.0** — see [LICENSE](./LICENSE).
-
----
+GPL-3.0 — see [LICENSE](./LICENSE). Filterlists retain their own MIT licenses (see `data/filterlists/README.md`).
 
 ## 👤 Maintainer
 
 **Primary:** [2pineapples](https://gitlab.com/2pineapples) — `44606328-2pineapples@users.noreply.gitlab.com`
-
 **GitHub Mirror:** [nexverse404](https://github.com/nexverse404) — `308237607+nexverse404@users.noreply.github.com`
+> GitHub commits authored as `nexverse404` per platform policy; canonical `2pineapples`.
 
-> Canonical identity is `2pineapples` on GitLab. This GitHub mirror is maintained under `nexverse404` for GitHub compatibility — all commits on GitHub are authored as `nexverse404` per platform requirements, with full attribution retained here. Every commit on this branch is signed/created as `nexverse404`.
-
----
-
-<p align="center">Made with 🌹 and Rust for safer communities</p>
+<p align="center">Made with 🌹 and Rust — NSFW/Gore links via GitHub filterlists</p>

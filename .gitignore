@@ -10,12 +10,14 @@ Cargo.lock.bak
 secrets/
 tokens.json
 
-# Bot data
-data/
-logs/
+# Bot data — keep bundled filterlists
+data/*
+!data/filterlists
+!data/filterlists/**
 *.log
 *.sqlite
 *.db
+logs/
 
 # Models & weights (large files, download separately)
 models/
