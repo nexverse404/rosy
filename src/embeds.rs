@@ -10,6 +10,9 @@ pub const COLOR_INVITE: u32 = 0x3B82F6; // sky blue
 pub const COLOR_REVIEW: u32 = 0xFFCC02; // warm yellow
 pub const COLOR_INFO: u32 = 0x57F287; // discord green
 
+pub const COLOR_VIDEO: u32 = 0x5865F2; // discord blurple
+pub const COLOR_GENDER: u32 = 0xEB459E; // pink
+
 pub fn color_for_category(cat: &str) -> u32 {
     match cat.to_ascii_lowercase().as_str() {
         c if c.contains("nsfw") => COLOR_NSFW,
@@ -18,6 +21,8 @@ pub fn color_for_category(cat: &str) -> u32 {
         c if c.contains("sus") || c.contains("cheap") || c.contains("tld") || c.contains("new") => COLOR_SUS,
         c if c.contains("invite") => COLOR_INVITE,
         c if c.contains("review") => COLOR_REVIEW,
+        c if c.contains("video") => COLOR_VIDEO,
+        c if c.contains("gender") || c.contains("male") || c.contains("female") => COLOR_GENDER,
         _ => COLOR_NSFW,
     }
 }
@@ -29,6 +34,9 @@ pub fn category_emoji(cat: &str) -> &'static str {
         c if c.contains("tor") || c.contains("proxy") => "🧅",
         c if c.contains("sus") || c.contains("cheap") || c.contains("tld") => "⚠️",
         c if c.contains("invite") => "📨",
+        c if c.contains("video") => "🎞️",
+        c if c.contains("gender") || c.contains("male") => "🧬",
+        c if c.contains("female") => "🧬",
         _ => "🛡️",
     }
 }

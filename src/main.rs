@@ -60,17 +60,20 @@ impl EventHandler for Handler {
         }
         let _ = self.db.get_guild(guild_id.get());
         let fl = self.filterlists.get();
-        info!("Guild {} ({} members) — filterlists NSFW {} | Gore {} | Tor {} | Cheap-TLD {} | thr NSFW {:.2}/{:.2} Gore {:.2}/{:.2}", guild.name, guild.member_count, fl.nsfw_count, fl.gore_count, fl.tor_count, fl.cheap_tlds_count, self.config.nsfw_threshold, self.config.nsfw_review_threshold, self.config.gore_threshold, self.config.gore_review_threshold);
-        // Easy config tip for new guilds
+        info!("Guild {} ({} members) — filterlists NSFW {} | Gore {} | Tor {} | Cheap-TLD {} | thr NSFW {:.2}/{:.2} Gore {:.2}/{:.2} | video recommended ON",
+            guild.name, guild.member_count, fl.nsfw_count, fl.gore_count, fl.tor_count, fl.cheap_tlds_count,
+            self.config.nsfw_threshold, self.config.nsfw_review_threshold, self.config.gore_threshold, self.config.gore_review_threshold);
         if is_new.unwrap_or(false) {
             if let Some(sys) = guild.system_channel_id {
                 let embed = embeds::info_embed(
                     "🌹 Rosy Guard installed!",
-                    &format!("**Welcome!** Rosy blocks NSFW/Gore/Tor/Cheap-Sus + images.\n\n\
+                    &format!("**Welcome!** Rosy blocks NSFW/Gore/Tor/Cheap-Sus + images + video (recommended).\n\n\
                         **Get started in 30s:**\n\
                         • `/rosy setup` — step-by-step wizard\n\
                         • `/rosy dashboard` — click buttons to config (recommended for admins)\n\
-                        • `/rosy preset balanced` — one-click apply Balanced preset\n\n\
+                        • `/rosy preset balanced` — one-click apply Balanced preset (0.85, video ON)\n\
+                        • `/rosy gender channel:#nsfw action:block gender:female` — per-channel gender\n\
+                        • `/rosy video enable:true` — video blocking (recommended ON, not moderatable yet)\n\n\
                         *Filterlists: NSFW {} | Gore {} | Tor {} | Cheap-TLD {} — auto-updated from GitHub.*\n\
                         *All per-server, instant, no restart.*", fl.nsfw_count, fl.gore_count, fl.tor_count, fl.cheap_tlds_count)
                 );
@@ -80,7 +83,8 @@ impl EventHandler for Handler {
     }
     async fn ready(&self, ctx: Context, ready: Ready) {
         let fl = self.filterlists.get();
-        info!("{} connected — {} guilds — NSFW:{} Gore:{} Tor:{} Cheap-TLD:{} — block ≥0.85 review 0.75–0.85 — easy config dashboard enabled", ready.user.name, ready.guilds.len(), fl.nsfw_count, fl.gore_count, fl.tor_count, fl.cheap_tlds_count);
+        info!("{} connected — {} guilds — NSFW:{} Gore:{} Tor:{} Cheap-TLD:{} — block ≥0.85 review 0.75–0.85 — video recommended ON — easy config dashboard enabled",
+            ready.user.name, ready.guilds.len(), fl.nsfw_count, fl.gore_count, fl.tor_count, fl.cheap_tlds_count);
         for cmd in commands::register_commands() { if let Err(e) = serenity::all::Command::create_global_command(&ctx.http, cmd).await { warn!("Global cmd failed: {:?}", e); } }
         let mgr = self.filterlists.clone();
         tokio::spawn(async move {
@@ -102,10 +106,12 @@ async fn main() {
     let db = Db::open(&db_path).unwrap_or_else(|e| { error!("DB open {} failed: {} → in-memory", db_path, e); Db::open_in_memory().expect("mem db") });
     let filterlists_mgr = FilterListManager::new();
     let fl = filterlists_mgr.get();
-    info!(nsfw_block=config.nsfw_threshold, nsfw_review=config.nsfw_review_threshold, gore_block=config.gore_threshold, gore_review=config.gore_review_threshold, nsfw_count=fl.nsfw_count, gore_count=fl.gore_count, tor_count=fl.tor_count, cheap_tlds_count=fl.cheap_tlds_count, nsfw_src=%fl.nsfw_source, gore_src=%fl.gore_source, tor_src=%fl.tor_source, tld_src=%fl.cheap_tlds_source, db=%db_path, "Starting Rosy Guard 🌹 — easy config dashboard for admins");
+    info!(nsfw_block=config.nsfw_threshold, nsfw_review=config.nsfw_review_threshold, gore_block=config.gore_threshold, gore_review=config.gore_review_threshold, nsfw_count=fl.nsfw_count, gore_count=fl.gore_count, tor_count=fl.tor_count, cheap_tlds_count=fl.cheap_tlds_count, nsfw_src=%fl.nsfw_source, gore_src=%fl.gore_source, tor_src=%fl.tor_source, tld_src=%fl.cheap_tlds_source, video_block=config.block_videos, db=%db_path, "Starting Rosy Guard 🌹 — easy config dashboard + per-channel gender/video (video recommended ON)");
     let nsfw = NsfwDetector::new_with_review(&config.nsfw_model_path, config.nsfw_threshold, config.nsfw_review_threshold);
     let gore = GoreDetector::new_with_review(&config.gore_model_path, config.gore_threshold, config.gore_review_threshold);
-    let image_filter = Arc::new(ImageFilter::new(nsfw, gore, config.block_gender_images).with_gender_threshold(config.gender_threshold).with_skip_tiny(config.skip_tiny_images));
+    // Enable gender filter engine so per-channel policies can be enforced (threshold 0.90, audit stub)
+    let gender_enabled = config.block_gender_images || config.gender_block_male || config.gender_block_female || true;
+    let image_filter = Arc::new(ImageFilter::new(nsfw, gore, gender_enabled).with_gender_threshold(config.gender_threshold).with_skip_tiny(config.skip_tiny_images));
     let link_scanner = Arc::new(LinkScanner::new(fl.clone(), config.allowed_domains.clone(), config.block_invites));
     let http_client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(15)).user_agent("rosy-guard/0.1 (+https://github.com/nexverse404/rosy) — filterlists: blocklistproject/Lists + aegis-blocklist + hagezi").build().expect("http client");
     let intents = GatewayIntents::GUILD_MESSAGES | GatewayIntents::MESSAGE_CONTENT | GatewayIntents::GUILDS | GatewayIntents::GUILD_MEMBERS;

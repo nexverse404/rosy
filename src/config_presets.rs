@@ -22,9 +22,9 @@ impl Preset {
     }
     pub fn description(&self) -> &'static str {
         match self {
-            Preset::Strict => "🛡️ Strict — block all NSFW/Gore/Tor/Cheap-TLD, low thresholds (0.80), timeout 10m",
-            Preset::Balanced => "⚖️ Balanced — recommended, NSFW/Gore 0.85, Tor+Cheap on, review queue on (default)",
-            Preset::Permissive => "🌙 Permissive — only high-confidence NSFW/Gore 0.90, Tor/Cheap off, no timeout",
+            Preset::Strict => "🛡️ Strict — NSFW/Gore 0.80, gender off, video recommended-on, Tor/Cheap on, 10m timeout",
+            Preset::Balanced => "⚖️ Balanced — NSFW/Gore 0.85, gender off, video recommended-on, Tor+Cheap on, 5m timeout",
+            Preset::Permissive => "🌙 Permissive — NSFW/Gore 0.90, gender off, video off, Tor/Cheap off, no timeout",
             Preset::Custom => "🔧 Custom — keep your current tweaks",
         }
     }
@@ -42,31 +42,40 @@ impl Preset {
                 cfg.nsfw_threshold = Some(0.80);
                 cfg.gore_threshold = Some(0.80);
                 cfg.block_gender_images = Some(false);
+                cfg.gender_block_male = Some(false);
+                cfg.gender_block_female = Some(false);
                 cfg.block_invites = Some(true);
                 cfg.delete_message = Some(true);
                 cfg.send_warning = Some(true);
                 cfg.timeout_duration_seconds = Some(600);
                 cfg.allow_in_nsfw_channels = Some(false);
+                cfg.block_videos = Some(true);
             }
             Preset::Balanced => {
                 cfg.nsfw_threshold = Some(0.85);
                 cfg.gore_threshold = Some(0.85);
                 cfg.block_gender_images = Some(false);
+                cfg.gender_block_male = Some(false);
+                cfg.gender_block_female = Some(false);
                 cfg.block_invites = Some(true);
                 cfg.delete_message = Some(true);
                 cfg.send_warning = Some(true);
                 cfg.timeout_duration_seconds = Some(300);
                 cfg.allow_in_nsfw_channels = Some(false);
+                cfg.block_videos = Some(true);
             }
             Preset::Permissive => {
                 cfg.nsfw_threshold = Some(0.90);
                 cfg.gore_threshold = Some(0.90);
                 cfg.block_gender_images = Some(false);
+                cfg.gender_block_male = Some(false);
+                cfg.gender_block_female = Some(false);
                 cfg.block_invites = Some(false);
                 cfg.delete_message = Some(true);
                 cfg.send_warning = Some(true);
                 cfg.timeout_duration_seconds = Some(0);
                 cfg.allow_in_nsfw_channels = Some(true);
+                cfg.block_videos = Some(false);
             }
             Preset::Custom => {}
         }
