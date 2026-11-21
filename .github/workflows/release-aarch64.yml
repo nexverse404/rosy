@@ -1,0 +1,46 @@
+name: Release AArch64
+
+on:
+  release:
+    types: [published, prereleased]
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build-aarch64:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.88.0"
+          targets: aarch64-unknown-linux-gnu
+      - name: Build AArch64
+        run: |
+          cargo build --release --target aarch64-unknown-linux-gnu --offline || cargo build --release --target aarch64-unknown-linux-gnu
+          ls -lh target/aarch64-unknown-linux-gnu/release/rosy
+          file target/aarch64-unknown-linux-gnu/release/rosy || readelf -h target/aarch64-unknown-linux-gnu/release/rosy | head -n 20
+          sha256sum target/aarch64-unknown-linux-gnu/release/rosy > rosy-aarch64-unknown-linux-gnu.sha256
+          gzip -9 -c target/aarch64-unknown-linux-gnu/release/rosy > rosy-aarch64-unknown-linux-gnu.gz
+          cp target/aarch64-unknown-linux-gnu/release/rosy rosy-aarch64-unknown-linux-gnu
+          chmod +x rosy-aarch64-unknown-linux-gnu
+      - name: Upload to release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "${{ github.ref_name }}" --repo "${{ github.repository }}" || gh release create "${{ github.ref_name }}" --draft --title "${{ github.ref_name }}" --generate-notes --target "${{ github.sha }}" --repo "${{ github.repository }}"
+          gh release upload "${{ github.ref_name }}" rosy-aarch64-unknown-linux-gnu rosy-aarch64-unknown-linux-gnu.gz rosy-aarch64-unknown-linux-gnu.sha256 --clobber --repo "${{ github.repository }}"
+      - name: Upload artifact (always)
+        uses: actions/upload-artifact@v4
+        with:
+          name: rosy-aarch64-unknown-linux-gnu
+          path: |
+            rosy-aarch64-unknown-linux-gnu
+            rosy-aarch64-unknown-linux-gnu.gz
+            rosy-aarch64-unknown-linux-gnu.sha256
+          retention-days: 90
