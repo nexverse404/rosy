@@ -85,9 +85,8 @@ pub async fn handle_message(
             let is_img = att.content_type.as_ref().map(|ct| ct.starts_with("image/")).unwrap_or(false) || is_likely_image_url(&att.url);
             if is_img { image_urls.push(att.url.clone()); }
             // Video URLs that aren't image but look like video
-            if is_video_url(&att.url) || att.content_type.as_ref().map(|ct| ct.starts_with("video/")).unwrap_or(false) {
-                if !video_urls.contains(&att.url) { video_urls.push(att.url.clone()); }
-            }
+            if (is_video_url(&att.url) || att.content_type.as_ref().map(|ct| ct.starts_with("video/")).unwrap_or(false))
+                && !video_urls.contains(&att.url) { video_urls.push(att.url.clone()); }
         }
     }
     for embed in &msg.embeds {
@@ -130,7 +129,7 @@ pub async fn handle_message(
     let mut blocked_videos: Vec<String> = Vec::new();
     if should_block_videos && !video_urls.is_empty() {
         for vurl in &video_urls {
-            blocked_videos.push(format!("🎞️ <{}> — Video blocked (not moderatable yet — recommended). *Admins: `/rosy video enable:false` or per-channel `/rosy video channel:#ch enable:false` to allow*", vurl));
+            blocked_videos.push(format!("🎞️ <{vurl}> — Video blocked (not moderatable yet — recommended). *Admins: `/rosy video enable:false` or per-channel `/rosy video channel:#ch enable:false` to allow*"));
         }
         info!(guild=%guild_id, channel=%msg.channel_id, author=%msg.author.tag(), "Video block: {} videos in {}", video_urls.len(), channel_id_u64);
     }
@@ -183,7 +182,7 @@ pub async fn handle_message(
         if !v_categories.contains(&cat.to_string()) { v_categories.push(cat.to_string()); }
         violations.push(format!("🖼️ <{}> — {} `hash:{}`", ir.url, ir.reasons.join(", "), &ir.hash[..12.min(ir.hash.len())]));
     }
-    let mut reviews: Vec<String> = review_images.iter().map(|ir| format!("🔍 <{}> — {} `hash:{}`", ir.url, ir.reasons.join(", "), &ir.hash[..12.min(ir.hash.len())])).collect();
+    let reviews: Vec<String> = review_images.iter().map(|ir| format!("🔍 <{}> — {} `hash:{}`", ir.url, ir.reasons.join(", "), &ir.hash[..12.min(ir.hash.len())])).collect();
     let r_categories = vec!["Review".to_string()];
 
     if violations.is_empty() && reviews.is_empty() { return None; }

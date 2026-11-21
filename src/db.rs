@@ -90,8 +90,8 @@ impl GuildConfig {
         let female_n = self.gender_block_female_channels.len();
         if !male_glob && !female_glob && male_n == 0 && female_n == 0 { return "Off".into(); }
         let mut parts = vec![];
-        if male_glob { parts.push("Male global".to_string()); } else if male_n > 0 { parts.push(format!("Male in {} ch", male_n)); }
-        if female_glob { parts.push("Female global".to_string()); } else if female_n > 0 { parts.push(format!("Female in {} ch", female_n)); }
+        if male_glob { parts.push("Male global".to_string()); } else if male_n > 0 { parts.push(format!("Male in {male_n} ch")); }
+        if female_glob { parts.push("Female global".to_string()); } else if female_n > 0 { parts.push(format!("Female in {female_n} ch")); }
         if parts.is_empty() { "Off".into() } else { parts.join(" + ") }
     }
     pub fn video_summary(&self, global_default: bool) -> String {
@@ -99,10 +99,8 @@ impl GuildConfig {
         let per = self.video_blocked_channels.len();
         let exempt = self.video_allowed_channels.len();
         if global {
-            if exempt > 0 { format!("On (global, {} ch exempt)", exempt) } else { "On (all channels)".into() }
-        } else {
-            if per > 0 { format!("On in {} ch", per) } else { "Off".into() }
-        }
+            if exempt > 0 { format!("On (global, {exempt} ch exempt)") } else { "On (all channels)".into() }
+        } else if per > 0 { format!("On in {per} ch") } else { "Off".into() }
     }
 }
 

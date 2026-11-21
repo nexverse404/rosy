@@ -47,7 +47,7 @@ mod tests {
     #[test]
     fn stub_safe() {
         let d = GoreDetector::new("./models/nonexistent.onnx", 0.85);
-        let img = DynamicImage::new_rgb8(10, 10);
+        let img = DynamicImage::from_bytes(&[]).unwrap();
         let (s, block, _) = d.tier(&img);
         assert!(!block);
         assert!(s < 0.85);

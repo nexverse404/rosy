@@ -53,9 +53,9 @@ impl FilterLists {
         let combined: HashSet<String> = nsfw.iter().chain(gore.iter()).chain(tor.iter()).cloned().collect();
         info!(nsfw=nsfw.len(), gore=gore.len(), tor=tor.len(), cheap_tlds=cheap_tlds.len(), combined=combined.len(), "Loaded bundled filterlists");
         Self {
-            nsfw_source: format!("bundled:{} (blocklistproject/Lists#porn.txt sample + aegis)", BUNDLED_NSFW),
-            gore_source: format!("bundled:{} (aegis-blocklist#gore-shock.txt)", BUNDLED_GORE),
-            tor_source: format!("bundled:{} (hagezi/dns-blocklists#doh-vpn-proxy-bypass)", BUNDLED_TOR),
+            nsfw_source: format!("bundled:{BUNDLED_NSFW} (blocklistproject/Lists#porn.txt sample + aegis)"),
+            gore_source: format!("bundled:{BUNDLED_GORE} (aegis-blocklist#gore-shock.txt)"),
+            tor_source: format!("bundled:{BUNDLED_TOR} (hagezi/dns-blocklists#doh-vpn-proxy-bypass)"),
             cheap_tlds_source: format!("bundled:{} (hagezi/dns-blocklists#spam-tlds, {} TLDs)", BUNDLED_CHEAP_TLDS, cheap_tlds.len()),
             nsfw_count: nsfw.len(),
             gore_count: gore.len(),
@@ -183,13 +183,13 @@ impl FilterListManager {
         Err("API no content".into())
     }
     async fn fetch_via_codeload(&self, owner: &str, repo: &str, branch: &str, path: &str) -> Result<String, String> {
-        let api_url = format!("https://api.github.com/repos/{}/{}/contents/{}?ref={}", owner, repo, path, branch);
+        let api_url = format!("https://api.github.com/repos/{owner}/{repo}/contents/{path}?ref={branch}");
         let client = reqwest::Client::builder().user_agent("rosy-guard/0.1 (+https://github.com/nexverse404/rosy)").timeout(std::time::Duration::from_secs(15)).build().map_err(|e| format!("client: {e}"))?;
         let resp = client.get(&api_url).header("Accept", "application/vnd.github.v3+json").send().await.map_err(|e| format!("api: {e}"))?;
         if !resp.status().is_success() { return Err(format!("HTTP {}", resp.status())); }
         let json: serde_json::Value = resp.json().await.map_err(|e| format!("json: {e}"))?;
         if let Some(sha) = json.get("sha").and_then(|v| v.as_str()) {
-            let blob_url = format!("https://api.github.com/repos/{}/{}/git/blobs/{}", owner, repo, sha);
+            let blob_url = format!("https://api.github.com/repos/{owner}/{repo}/git/blobs/{sha}");
             let r2 = client.get(&blob_url).header("Accept", "application/vnd.github.v3+json").send().await.map_err(|e| format!("blob: {e}"))?;
             if r2.status().is_success() {
                 let bj: serde_json::Value = r2.json().await.map_err(|e| format!("blob json: {e}"))?;
@@ -240,7 +240,8 @@ fn base64_decode(input: &str) -> Result<Vec<u8>, String> {
     for (i, &c) in TABLE.iter().enumerate() { table[c as usize] = i as u8; }
     let mut out = Vec::new(); let mut buf: u32 = 0; let mut bits = 0;
     for &b in input.as_bytes() {
-        if b == b'=' { break; } if b == b'\n' || b == b'\r' { continue; }
+        if b == b'=' { break; }
+        if b == b'\n' || b == b'\r' { continue; }
         let v = table[b as usize]; if v == 255 { continue; }
         buf = (buf << 6) | v as u32; bits += 6;
         if bits >= 8 { bits -= 8; out.push((buf >> bits) as u8); buf &= (1 << bits) - 1; }

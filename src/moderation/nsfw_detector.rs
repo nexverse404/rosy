@@ -59,7 +59,7 @@ mod tests {
     #[test]
     fn stub_never_flags_block() {
         let d = NsfwDetector::new("./models/nonexistent.onnx", 0.85);
-        let img = DynamicImage::new_rgb8(10, 10);
+        let img = DynamicImage::from_bytes(&[]).unwrap();
         let (s, block, review) = d.tier(&img);
         assert!(!block);
         assert!(s < 0.85);
@@ -68,7 +68,7 @@ mod tests {
     #[test]
     fn threshold_respected() {
         let d = NsfwDetector::new("./models/nonexistent.onnx", 0.01);
-        let img = DynamicImage::new_rgb8(10, 10);
+        let img = DynamicImage::from_bytes(&[]).unwrap();
         let (blocked, score, _) = d.is_nsfw(&img);
         assert!(blocked);
         assert!(score >= 0.01);

@@ -47,7 +47,7 @@ impl LinkScanner {
         urls
     }
     pub fn extract_domain(&self, url: &str) -> String {
-        let with_scheme = if url.starts_with("http://") || url.starts_with("https://") { url.to_string() } else { format!("https://{}", url) };
+        let with_scheme = if url.starts_with("http://") || url.starts_with("https://") { url.to_string() } else { format!("https://{url}") };
         let extractor = TldExtractor::new(tldextract::TldOption::Mozilla);
         if let Ok(parsed) = url::Url::parse(&with_scheme) {
             if let Some(host) = parsed.host_str() {
@@ -61,7 +61,7 @@ impl LinkScanner {
     }
     fn is_builtin_safe(&self, host_or_domain: &str) -> bool {
         let lower = host_or_domain.to_ascii_lowercase();
-        BUILTIN_SAFE_DOMAINS.iter().any(|safe| lower == *safe || lower.ends_with(&format!(".{}", safe)))
+        BUILTIN_SAFE_DOMAINS.iter().any(|safe| lower == *safe || lower.ends_with(&format!(".{safe}")))
     }
     fn is_cdn_url(&self, url: &str) -> bool {
         let lower = url.to_ascii_lowercase();
@@ -71,33 +71,32 @@ impl LinkScanner {
 
     pub fn is_blocked(&self, url: &str) -> (bool, String, Option<String>) {
         let domain = self.extract_domain(url);
-        let url_with_scheme = if url.starts_with("http") { url.to_string() } else { format!("https://{}", url) };
+        let url_with_scheme = if url.starts_with("http") { url.to_string() } else { format!("https://{url}") };
         let host = url::Url::parse(&url_with_scheme).ok().and_then(|u| u.host_str().map(|h| h.to_ascii_lowercase())).unwrap_or_else(|| domain.clone());
         if self.is_cdn_url(url) { return (false, String::new(), None); }
         if self.is_builtin_safe(&host) || self.is_builtin_safe(&domain) {
-            if self.block_invites && INVITE_RE.is_match(url) {
-                if host.contains("discord.gg") || url.contains("discord.com/invite") {
+            if self.block_invites && INVITE_RE.is_match(url)
+                && (host.contains("discord.gg") || url.contains("discord.com/invite")) {
                     if self.allowed_domains.contains(&domain) || self.allowed_domains.contains(&host) { return (false, String::new(), None); }
                     return (true, "Discord invite links are blocked — use /rosy allow_domain to permit".into(), Some("Invite".into()));
                 }
-            }
             return (false, String::new(), None);
         }
         if self.allowed_domains.contains(&domain) || self.allowed_domains.contains(&host) { return (false, String::new(), None); }
         // NSFW/Gore/Tor/Cheap-Sus — all via GitHub filterlists
         if let Some(cat) = self.filterlists.category_for(&domain).or_else(|| self.filterlists.category_for(&host)) {
             let reason = match cat.as_str() {
-                "NSFW" => format!("🔞 NSFW domain: {} (source: blocklistproject/Lists#porn.txt)", domain),
-                "Gore" => format!("🩸 Gore/Shock domain: {} (source: aegis-blocklist#gore-shock.txt)", domain),
-                c if c.starts_with("Tor") => format!("🧅 Tor/Proxy bypass domain: {} (source: hagezi/dns-blocklists#doh-vpn-proxy-bypass)", domain),
-                c if c.contains("Cheap") || c.contains("Sus") => format!("⚠️ Cheap abused TLD / newly-registered sus: {} (source: hagezi#spam-tlds)", domain),
-                _ => format!("{} domain: {} (filterlist)", cat, domain),
+                "NSFW" => format!("🔞 NSFW domain: {domain} (source: blocklistproject/Lists#porn.txt)"),
+                "Gore" => format!("🩸 Gore/Shock domain: {domain} (source: aegis-blocklist#gore-shock.txt)"),
+                c if c.starts_with("Tor") => format!("🧅 Tor/Proxy bypass domain: {domain} (source: hagezi/dns-blocklists#doh-vpn-proxy-bypass)"),
+                c if c.contains("Cheap") || c.contains("Sus") => format!("⚠️ Cheap abused TLD / newly-registered sus: {domain} (source: hagezi#spam-tlds)"),
+                _ => format!("{cat} domain: {domain} (filterlist)"),
             };
             return (true, reason, Some(cat));
         }
         // Direct .onion detection (even if not in list — any onion is Tor)
         if self.is_onion(url) || self.is_onion(&domain) || self.is_onion(&host) {
-            return (true, format!("🧅 Tor .onion link blocked: {} (source: hagezi + onion heuristic)", domain), Some("Tor".into()));
+            return (true, format!("🧅 Tor .onion link blocked: {domain} (source: hagezi + onion heuristic)"), Some("Tor".into()));
         }
         if self.block_invites && INVITE_RE.is_match(url) { return (true, "Discord invite links are blocked".into(), Some("Invite".into())); }
         (false, String::new(), None)
@@ -121,7 +120,7 @@ impl LinkScanner {
                 if seen.contains(&url) { continue; }
                 if self.is_cdn_url(&url) { continue; }
                 let domain = self.extract_domain(&url);
-                let host = url::Url::parse(&format!("https://{}", url)).ok().and_then(|u| u.host_str().map(|s| s.to_ascii_lowercase())).unwrap_or_else(|| domain.clone());
+                let host = url::Url::parse(&format!("https://{url}")).ok().and_then(|u| u.host_str().map(|s| s.to_ascii_lowercase())).unwrap_or_else(|| domain.clone());
                 let is_safe_builtin = self.is_builtin_safe(&host) || self.is_builtin_safe(&domain);
                 let (blocked, reason, category) = self.is_blocked(&url);
                 if blocked { results.push(LinkResult { url, domain, blocked, reason, category, is_safe_builtin }); }
@@ -164,9 +163,9 @@ mod tests {
         let (b, _, c) = s.is_blocked("https://bestgore.com/video");
         assert!(b); assert_eq!(c.as_deref(), Some("Gore"));
         let (b, _, c) = s.is_blocked("https://onion.pet/tor");
-        assert!(b); assert!(c.unwrap().contains("Tor") || c.unwrap().contains("Proxy"));
+        assert!(b); assert!(c.as_deref().is_some_and(|v| v.contains("Tor") || v.contains("Proxy")));
         let (b, _, c) = s.is_blocked("https://random-sus-site.xyz");
-        assert!(b); assert!(c.unwrap().contains("Cheap") || c.unwrap().contains("TLD"));
+        assert!(b); assert!(c.as_deref().is_some_and(|v| v.contains("Cheap") || v.contains("TLD")));
         let (b, _, _) = s.is_blocked("https://example.com");
         assert!(!b);
     }

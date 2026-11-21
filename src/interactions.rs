@@ -141,7 +141,7 @@ pub async fn handle_component(
                             _ => {}
                         }
                         let _ = db.upsert_guild(&cfg);
-                        update_dashboard(ctx, interaction, db, guild_id, &format!("🎚️ Threshold → {}", v)).await;
+                        update_dashboard(ctx, interaction, db, guild_id, &format!("🎚️ Threshold → {v}")).await;
                         return;
                     }
                 }
@@ -182,7 +182,7 @@ async fn update_dashboard(
     let _ = interaction.create_response(&ctx.http, CreateInteractionResponse::UpdateMessage(
         serenity::all::CreateInteractionResponseMessage::new().embed(embed).components(components)
     )).await;
-    let _ = interaction.create_followup(&ctx.http, serenity::all::CreateInteractionResponseFollowup::new().content(format!("✅ {}", toast)).ephemeral(true)).await;
+    let _ = interaction.create_followup(&ctx.http, serenity::all::CreateInteractionResponseFollowup::new().content(format!("✅ {toast}")).ephemeral(true)).await;
     info!("Guild {} dashboard action: {}", guild_id, toast);
 }
 

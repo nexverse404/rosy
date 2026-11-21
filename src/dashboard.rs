@@ -4,18 +4,18 @@ use serenity::all::{
     CreateActionRow, CreateButton, CreateEmbed, CreateEmbedAuthor, CreateEmbedFooter, CreateInteractionResponse,
     CreateInteractionResponseMessage, CreateSelectMenu, CreateSelectMenuOption, Timestamp,
 };
-use tracing::info;
 
-use crate::{config_presets::Preset, db::{Db, GuildConfig}, embeds};
+use crate::db::{Db, GuildConfig};
 
+#[allow(clippy::too_many_arguments)]
 pub fn build_dashboard_embed(guild_id: u64, cfg: &GuildConfig, global_nsfw: f32, global_gore: f32, filter_ns: usize, filter_gore: usize, filter_tor: usize, filter_tld: usize, global_block_videos: bool) -> CreateEmbed {
-    let nsfw_thr = cfg.nsfw_threshold.map(|v| format!("{:.2}", v)).unwrap_or_else(|| format!("global {:.2}", global_nsfw));
-    let gore_thr = cfg.gore_threshold.map(|v| format!("{:.2}", v)).unwrap_or_else(|| format!("global {:.2}", global_gore));
+    let nsfw_thr = cfg.nsfw_threshold.map(|v| format!("{v:.2}")).unwrap_or_else(|| format!("global {global_nsfw:.2}"));
+    let gore_thr = cfg.gore_threshold.map(|v| format!("{v:.2}")).unwrap_or_else(|| format!("global {global_gore:.2}"));
     let gender = cfg.gender_summary();
     let gender_detail = if cfg.gender_block_male_channels.is_empty() && cfg.gender_block_female_channels.is_empty() && cfg.gender_block_male.is_none() && cfg.gender_block_female.is_none() && cfg.block_gender_images.is_none() {
         "Off — no gender filtering".to_string()
     } else {
-        format!("{} — per-channel allowed", gender)
+        format!("{gender} — per-channel allowed")
     };
     let invites = if cfg.block_invites.unwrap_or(true) {"✅ On"} else {"❌ Off"};
     let review = "✅ On (0.75–0.85 → mod queue)";
@@ -27,26 +27,25 @@ pub fn build_dashboard_embed(guild_id: u64, cfg: &GuildConfig, global_nsfw: f32,
     let allowed = if cfg.allowed_domains.is_empty() {"None".into()} else { cfg.allowed_domains.iter().take(3).cloned().collect::<Vec<_>>().join(", ") + if cfg.allowed_domains.len() > 3 {", …"} else {""}};
     let video = cfg.video_summary(global_block_videos);
     let video_detail = if cfg.block_videos.unwrap_or(global_block_videos) {
-        format!("{} — ⚠️ recommended until video moderation lands", video)
+        format!("{video} — ⚠️ recommended until video moderation lands")
     } else if !cfg.video_blocked_channels.is_empty() {
-        format!("{} — blocks uploads/embeds in those channels", video)
+        format!("{video} — blocks uploads/embeds in those channels")
     } else {
-        format!("{} — video not blocked (enable recommended)", video)
+        format!("{video} — video not blocked (enable recommended)")
     };
 
     CreateEmbed::new()
         .title("🌹 Rosy Guard — Easy Config Dashboard")
         .description(format!(
-            "**Guild `{}` • One-click setup for admins**\n\
+            "**Guild `{guild_id}` • One-click setup for admins**\n\
             > Use buttons below to toggle, or pick a preset — changes apply instantly. No restart needed.\n\
-            > `Tip: /rosy preset balanced` is the recommended starting point.`",
-            guild_id
+            > `Tip: /rosy preset balanced` is the recommended starting point.`"
         ))
         .color(0xFF2D55)
-        .field("🔞 NSFW Threshold", format!("`{}` — block ≥thr, review thr-0.10", nsfw_thr), true)
-        .field("🩸 Gore Threshold", format!("`{}` — same tiers", gore_thr), true)
-        .field("🧬 Gender Filter", format!("`{}`\n_{}_", gender, gender_detail), true)
-        .field("🎞️ Video Blocking", format!("`{}`\n_{}_", video, video_detail), true)
+        .field("🔞 NSFW Threshold", format!("`{nsfw_thr}` — block ≥thr, review thr-0.10"), true)
+        .field("🩸 Gore Threshold", format!("`{gore_thr}` — same tiers"), true)
+        .field("🧬 Gender Filter", format!("`{gender}`\n_{gender_detail}_"), true)
+        .field("🎞️ Video Blocking", format!("`{video}`\n_{video_detail}_"), true)
         .field("📨 Block Invites", invites, true)
         .field("🔓 Bypass in NSFW channels", allow_nsfw, true)
         .field("👀 Review Queue", review, true)
@@ -55,7 +54,7 @@ pub fn build_dashboard_embed(guild_id: u64, cfg: &GuildConfig, global_nsfw: f32,
         .field("💬 Exempt Channels", exempt_ch, true)
         .field("🚫 Extra Blocked", blocked, true)
         .field("✅ Allowlisted", allowed, true)
-        .field("📚 Filterlists (live)", format!("NSFW `{}` • Gore `{}` • Tor `{}` • Cheap-TLD `{}`", filter_ns, filter_gore, filter_tor, filter_tld), false)
+        .field("📚 Filterlists (live)", format!("NSFW `{filter_ns}` • Gore `{filter_gore}` • Tor `{filter_tor}` • Cheap-TLD `{filter_tld}`"), false)
         .field("💡 Per-Channel Tips", "• `/rosy gender channel:#nsfw allow:male block:female` — per-channel male/female\n• `/rosy video channel:#clips enable:false` — allow video in one channel\n• Video is **recommended ON** globally — cannot be moderated for NSFW yet", false)
         .footer(CreateEmbedFooter::new("Rosy Guard • Changes save to SQLite • Use /rosy export to backup"))
         .timestamp(Timestamp::now())
@@ -140,6 +139,7 @@ pub fn per_channel_help_embed() -> CreateEmbed {
 }
 
 // Helper to send dashboard
+#[allow(clippy::too_many_arguments)]
 pub async fn send_dashboard(
     ctx: &serenity::prelude::Context,
     guild_id: u64,

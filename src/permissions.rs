@@ -1,6 +1,6 @@
 //! Permission helpers — who can configure Rosy, who is exempt
 
-use serenity::all::{GuildId, Member, Permissions, RoleId};
+use serenity::all::{GuildId, Member, RoleId};
 
 /// Check if member can manage Rosy (Manage Guild or Administrator)
 pub fn can_configure(member: &Member, guild_id: GuildId, cache_roles: &std::collections::HashMap<RoleId, serenity::model::guild::Role>) -> bool {
@@ -35,7 +35,7 @@ pub fn is_exempt(
         }
     }
     if guild_cfg.exempt_channels.contains(&channel_id) {
-        return Some(format!("exempt channel {}", channel_id));
+        return Some(format!("exempt channel {channel_id}"));
     }
     None
 }

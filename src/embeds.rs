@@ -58,11 +58,11 @@ pub fn block_embed(
     let description = format!(
         "{emoji} **Violation detected** — {} item(s) blocked\n{}\n",
         violations.len(),
-        violations.iter().map(|v| format!("• {}", v)).collect::<Vec<_>>().join("\n")
+        violations.iter().map(|v| format!("• {v}")).collect::<Vec<_>>().join("\n")
     );
 
     let mut embed = CreateEmbed::new()
-        .title(format!("{} Rosy Guard — Blocked", emoji))
+        .title(format!("{emoji} Rosy Guard — Blocked"))
         .description(description)
         .color(color)
         .field("Channel", channel_mention, true)
@@ -92,7 +92,7 @@ pub fn review_embed(
     let description = format!(
         "🔍 **Needs human review** — {} item(s) (medium confidence, not auto-deleted)\n{}\n",
         reviews.len(),
-        reviews.iter().map(|v| format!("• {}", v)).collect::<Vec<_>>().join("\n")
+        reviews.iter().map(|v| format!("• {v}")).collect::<Vec<_>>().join("\n")
     );
     CreateEmbed::new()
         .title("🔍 Rosy Guard — Review Queue")

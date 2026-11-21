@@ -17,12 +17,12 @@ mod utils;
 
 use std::sync::Arc;
 use serenity::{all::{GuildId, Interaction, Message, MessageUpdateEvent, Ready}, async_trait, prelude::*};
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
 use config::Config;
 use db::Db;
 use filterlist::FilterListManager;
-use moderation::{gore_detector::GoreDetector, image_filter::ImageFilter, link_scanner::LinkScanner, nsfw_detector::NsfwDetector};
+use moderation::{image_filter::ImageFilter, link_scanner::LinkScanner};
 
 struct Handler {
     config: Config,

@@ -1,6 +1,5 @@
 //! Unified image moderation — gender-aware + video guard
 
-use std::io::Cursor;
 use image::DynamicImage;
 use sha2::{Digest, Sha256};
 use tracing::{error, info, warn};
@@ -52,15 +51,15 @@ impl ImageFilter {
     pub fn with_skip_tiny(mut self, v: bool) -> Self { self.skip_tiny = v; self }
 
     async fn fetch_image(&self, url: &str, client: &reqwest::Client) -> Result<Vec<u8>, String> {
-        let resp = client.get(url).send().await.map_err(|e| format!("request failed: {}", e))?;
+        let resp = client.get(url).send().await.map_err(|e| format!("request failed: {e}"))?;
         if !resp.status().is_success() { return Err(format!("HTTP {}", resp.status())); }
-        let bytes = resp.bytes().await.map_err(|e| format!("read failed: {}", e))?;
+        let bytes = resp.bytes().await.map_err(|e| format!("read failed: {e}"))?;
         if bytes.len() > 10 * 1024 * 1024 { return Err(format!("image too large: {} bytes", bytes.len())); }
         if bytes.is_empty() { return Err("empty image".into()); }
         Ok(bytes.to_vec())
     }
     fn decode_image(data: &[u8]) -> Result<DynamicImage, String> {
-        image::load_from_memory(data).map_err(|e| format!("decode failed: {}", e))
+        image::load_from_memory(data).map_err(|e| format!("decode failed: {e}"))
     }
     fn hash_bytes(data: &[u8]) -> String {
         let mut h = Sha256::new(); h.update(data); format!("{:x}", h.finalize())
@@ -128,8 +127,8 @@ impl ImageFilter {
         let blocked = nsfw_blocked || gore_blocked || gender_would_block;
         let review = !blocked && (nsfw_review || gore_review);
         let mut reasons = Vec::new();
-        if nsfw_blocked { reasons.push(format!("NSFW high {:.2}", nsfw_score)); } else if nsfw_review { reasons.push(format!("NSFW medium {:.2} — review", nsfw_score)); }
-        if gore_blocked { reasons.push(format!("Gore high {:.2}", gore_score)); } else if gore_review { reasons.push(format!("Gore medium {:.2} — review", gore_score)); }
+        if nsfw_blocked { reasons.push(format!("NSFW high {nsfw_score:.2}")); } else if nsfw_review { reasons.push(format!("NSFW medium {nsfw_score:.2} — review")); }
+        if gore_blocked { reasons.push(format!("Gore high {gore_score:.2}")); } else if gore_review { reasons.push(format!("Gore medium {gore_score:.2} — review")); }
         if gender_would_block { reasons.push(format!("Gender {:?} high {:.2}/{:.2}", gender.predicted, gender.male, gender.female)); }
         let tier = if blocked { Tier::Block } else if review { Tier::Review } else { Tier::Allow };
         ImageScanResult { url: url.to_string(), blocked, review, tier, reasons, nsfw_score, gore_score, gender: gender.clone(), gender_blocked: gender_would_block, hash, width: w, height: h, error: None }
@@ -199,7 +198,7 @@ mod tests {
     #[test]
     fn gender_disabled_never_blocks() {
         let f = filter();
-        let img = DynamicImage::new_rgb8(10, 10);
+        let img = DynamicImage::from_bytes(&[]).unwrap();
         let (scores, blocked) = f.gender_scan(&img);
         assert!(!blocked);
         assert_eq!(scores.predicted, Gender::Unknown);

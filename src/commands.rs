@@ -168,7 +168,7 @@ pub async fn handle_interaction(
                 _ => { respond_ephemeral(ctx, interaction, "Pick `nsfw` or `gore`").await; return; }
             }
             if db.upsert_guild(&cfg).is_ok() {
-                respond_ephemeral(ctx, interaction, &format!("✅ **{} threshold** → `{:.2}` — higher = fewer false positives, lower = stricter\n*Live:* next message uses it. *Dashboard:* `/rosy dashboard`", filter, val)).await;
+                respond_ephemeral(ctx, interaction, &format!("✅ **{filter} threshold** → `{val:.2}` — higher = fewer false positives, lower = stricter\n*Live:* next message uses it. *Dashboard:* `/rosy dashboard`")).await;
             } else { respond_ephemeral(ctx, interaction, "❌ Save failed").await; }
         }
         "setup" => {
@@ -182,8 +182,8 @@ pub async fn handle_interaction(
         "status" => {
             let cfg = db.get_guild(guild_id).unwrap_or_else(|_| crate::db::GuildConfig::new(guild_id));
             let global = crate::config::Config::from_env();
-            let nsfw = cfg.nsfw_threshold.map(|v| format!("{:.2}", v)).unwrap_or_else(|| format!("global {:.2}", global.nsfw_threshold));
-            let gore = cfg.gore_threshold.map(|v| format!("{:.2}", v)).unwrap_or_else(|| format!("global {:.2}", global.gore_threshold));
+            let nsfw = cfg.nsfw_threshold.map(|v| format!("{v:.2}")).unwrap_or_else(|| format!("global {:.2}", global.nsfw_threshold));
+            let gore = cfg.gore_threshold.map(|v| format!("{v:.2}")).unwrap_or_else(|| format!("global {:.2}", global.gore_threshold));
             let gender_summary = cfg.gender_summary();
             let video_summary = cfg.video_summary(global.block_videos);
             let gender_details = format!("m: {:?} f: {:?} legacy: {:?} | channels m:{} f:{}", cfg.gender_block_male, cfg.gender_block_female, cfg.block_gender_images, cfg.gender_block_male_channels.len(), cfg.gender_block_female_channels.len());
@@ -208,7 +208,7 @@ pub async fn handle_interaction(
             let cfg = db.get_guild(guild_id).unwrap_or_else(|_| crate::db::GuildConfig::new(guild_id));
             let json = serde_json::to_string_pretty(&cfg).unwrap_or_else(|_| "{}".into());
             let embed = crate::embeds::info_embed("💾 Rosy Config Export", &format!("**Guild `{}`** — backup ready (`{}` bytes)\n```json\n{}```\n*Import later via dashboard or `/rosy preset` + re-apply.*", guild_id, json.len(), &json[..json.len().min(800)]));
-            let attachment = CreateAttachment::bytes(json.into_bytes(), format!("rosy-config-{}.json", guild_id));
+            let attachment = CreateAttachment::bytes(json.into_bytes(), format!("rosy-config-{guild_id}.json"));
             let _ = interaction.create_response(&ctx.http, CreateInteractionResponse::Message(
                 CreateInteractionResponseMessage::new().embed(embed).add_file(attachment).ephemeral(true)
             )).await;
@@ -299,7 +299,7 @@ pub async fn handle_interaction(
                 let scanner = crate::moderation::link_scanner::LinkScanner::new(fl, cfg.allowed_domains, cfg.block_invites.unwrap_or(true));
                 let res = scanner.scan_text(&url);
                 let blocked = res.iter().any(|r| r.blocked);
-                let msg = if res.is_empty() { "No URLs found — would not block".into() } else { format!("`{url}` → blocked={}, details={:?} (beautiful embeds show this in log)", blocked, res) };
+                let msg = if res.is_empty() { "No URLs found — would not block".into() } else { format!("`{url}` → blocked={blocked}, details={res:?} (beautiful embeds show this in log)") };
                 respond_ephemeral(ctx, interaction, &msg).await;
                 return;
             }
@@ -323,7 +323,7 @@ async fn handle_gender(ctx: &serenity::prelude::Context, interaction: &serenity:
             if cfg.gender_block_male_channels.is_empty() {"none".into()} else { cfg.gender_block_male_channels.iter().map(|c| format!("<#{c}>")).collect::<Vec<_>>().join(", ") },
             if cfg.gender_block_female_channels.is_empty() {"none".into()} else { cfg.gender_block_female_channels.iter().map(|c| format!("<#{c}>")).collect::<Vec<_>>().join(", ") },
         );
-        respond_ephemeral(ctx, interaction, &format!("**🧬 Gender Filter — `{}`**\n```\n{}\n```\n_View in dashboard:_ `/rosy dashboard`", summary, detail)).await;
+        respond_ephemeral(ctx, interaction, &format!("**🧬 Gender Filter — `{summary}`**\n```\n{detail}\n```\n_View in dashboard:_ `/rosy dashboard`")).await;
         return;
     }
 
