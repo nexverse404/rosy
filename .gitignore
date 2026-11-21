@@ -1,0 +1,44 @@
+# Rust
+/target/
+/debug/
+Cargo.lock.bak
+**/*.rs.bk
+
+# Env & secrets
+.env
+*.env
+secrets/
+tokens.json
+
+# Bot data
+data/
+logs/
+*.log
+*.sqlite
+*.db
+
+# Models & weights (large files, download separately)
+models/
+weights/
+*.onnx
+*.pt
+*.pth
+*.bin
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.helix/
+
+# Docker
+.docker/
+
+# Testing
+.coverage
