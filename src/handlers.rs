@@ -2,7 +2,7 @@
 
 use std::{collections::HashSet, sync::Arc};
 use serenity::all::{ChannelId, CreateMessage, Message};
-use serenity::prelude::Context;
+use serenity::prelude::{Context, Mentionable};
 use tracing::{error, info, warn};
 
 use crate::{config::{Config, Tier}, db::Db, embeds, moderation::{image_filter::ImageFilter, link_scanner::LinkScanner}, permissions};
@@ -58,7 +58,12 @@ pub async fn handle_message(
     let enable_review_queue = global_config.enable_review_queue;
     let channel_id_u64 = msg.channel_id.get();
 
-    let is_nsfw_channel = ctx.cache.guild_channel(msg.channel_id).map(|c| c.nsfw).unwrap_or(false);
+    let is_nsfw_channel = ctx
+        .cache
+        .guild(guild_id)
+        .and_then(|g| g.channels.get(&msg.channel_id).cloned())
+        .map(|c| c.nsfw)
+        .unwrap_or(false);
     if let Some(member) = &msg.member {
         if let Some(reason) = permissions::is_exempt(&member.roles, channel_id_u64, &guild_cfg, is_nsfw_channel) {
             info!("Exempt {}: {}", msg.author.tag(), reason);
@@ -218,7 +223,8 @@ pub async fn handle_message(
     }
     if !violations.is_empty() && timeout_secs > 0 {
         let until = chrono::Utc::now() + chrono::Duration::seconds(timeout_secs as i64);
-        if let Err(e) = guild_id.edit_member(&ctx.http, msg.author.id, serenity::builder::EditMember::new().disable_communication_until_datetime(&until.into())).await { warn!("Timeout {} failed: {:?}", msg.author.tag(), e); } else { info!("Timed out {} until {}", msg.author.tag(), until.format("%Y-%m-%d %H:%M:%S UTC")); db.log_action(guild_id.get(), msg.channel_id.get(), msg.author.id.get(), "timeout", &format!("{}s: {}", timeout_secs, violations.join("; "))); }
+        let ts = serenity::all::Timestamp::from_unix_timestamp(until.timestamp()).unwrap_or_else(|_| serenity::all::Timestamp::now());
+        if let Err(e) = guild_id.edit_member(&ctx.http, msg.author.id, serenity::builder::EditMember::new().disable_communication_until_datetime(ts)).await { warn!("Timeout {} failed: {:?}", msg.author.tag(), e); } else { info!("Timed out {} until {}", msg.author.tag(), until.format("%Y-%m-%d %H:%M:%S UTC")); db.log_action(guild_id.get(), msg.channel_id.get(), msg.author.id.get(), "timeout", &format!("{}s: {}", timeout_secs, violations.join("; "))); }
     }
 
     Some(ScanOutcome { violations, reviews, image_results: blocked_images, link_results: blocked_links })

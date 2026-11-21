@@ -230,13 +230,13 @@ pub async fn handle_interaction(
             let mut cfg = db.get_guild(guild_id).unwrap_or_else(|_| crate::db::GuildConfig::new(guild_id));
             let mut changes = vec![];
             if let Some(cmd_opt) = interaction.data.options.first() {
-                if let Some(serenity::all::CommandDataOptionValue::SubCommand(subs)) = &cmd_opt.value {
+                if let serenity::all::CommandDataOptionValue::SubCommand(subs) = &cmd_opt.value {
                     for s in subs {
                         match s.name.as_str() {
-                            "nsfw_threshold" => if let Some(serenity::all::CommandDataOptionValue::Number(v)) = &s.value { cfg.nsfw_threshold = Some(*v as f32); changes.push(format!("NSFW → {v:.2}")); },
-                            "gore_threshold" => if let Some(serenity::all::CommandDataOptionValue::Number(v)) = &s.value { cfg.gore_threshold = Some(*v as f32); changes.push(format!("Gore → {v:.2}")); },
-                            "block_gender_images" => if let Some(serenity::all::CommandDataOptionValue::Boolean(b)) = &s.value { cfg.block_gender_images = Some(*b); changes.push(format!("Gender → {b}")); },
-                            "allow_in_nsfw_channels" => if let Some(serenity::all::CommandDataOptionValue::Boolean(b)) = &s.value { cfg.allow_in_nsfw_channels = Some(*b); changes.push(format!("Allow NSFW-ch → {b}")); },
+                            "nsfw_threshold" => if let serenity::all::CommandDataOptionValue::Number(v) = &s.value { cfg.nsfw_threshold = Some(*v as f32); changes.push(format!("NSFW → {v:.2}")); },
+                            "gore_threshold" => if let serenity::all::CommandDataOptionValue::Number(v) = &s.value { cfg.gore_threshold = Some(*v as f32); changes.push(format!("Gore → {v:.2}")); },
+                            "block_gender_images" => if let serenity::all::CommandDataOptionValue::Boolean(b) = &s.value { cfg.block_gender_images = Some(*b); changes.push(format!("Gender → {b}")); },
+                            "allow_in_nsfw_channels" => if let serenity::all::CommandDataOptionValue::Boolean(b) = &s.value { cfg.allow_in_nsfw_channels = Some(*b); changes.push(format!("Allow NSFW-ch → {b}")); },
                             _ => {}
                         }
                     }
@@ -247,7 +247,7 @@ pub async fn handle_interaction(
         }
         "log_channel" => {
             let mut cfg = db.get_guild(guild_id).unwrap_or_else(|_| crate::db::GuildConfig::new(guild_id));
-            if let Some(cmd_opt) = interaction.data.options.first() { if let Some(serenity::all::CommandDataOptionValue::SubCommand(subs)) = &cmd_opt.value { for s in subs { if s.name == "channel" { if let Some(serenity::all::CommandDataOptionValue::Channel(cid)) = &s.value { cfg.log_channel_id = Some(cid.get()); let _ = db.upsert_guild(&cfg); respond_ephemeral(ctx, interaction, &format!("✅ Log channel set to <#{cid}>\n*Next:* `/rosy dashboard` to see it")).await; return; } } } } }
+            if let Some(cmd_opt) = interaction.data.options.first() { if let serenity::all::CommandDataOptionValue::SubCommand(subs) = &cmd_opt.value { for s in subs { if s.name == "channel" { if let serenity::all::CommandDataOptionValue::Channel(cid) = &s.value { cfg.log_channel_id = Some(cid.get()); let _ = db.upsert_guild(&cfg); respond_ephemeral(ctx, interaction, &format!("✅ Log channel set to <#{cid}>\n*Next:* `/rosy dashboard` to see it")).await; return; } } } } }
             respond_ephemeral(ctx, interaction, "❌ Could not read channel.").await;
         }
         "block_domain" | "allow_domain" | "unblock_domain" => {
@@ -259,14 +259,14 @@ pub async fn handle_interaction(
         }
         "exempt_role" => {
             let mut cfg = db.get_guild(guild_id).unwrap_or_else(|_| crate::db::GuildConfig::new(guild_id));
-            if let Some(cmd_opt) = interaction.data.options.first() { if let Some(serenity::all::CommandDataOptionValue::SubCommand(subs)) = &cmd_opt.value { for s in subs { if s.name == "role" { if let Some(serenity::all::CommandDataOptionValue::Role(rid)) = &s.value { cfg.exempt_roles.insert(rid.get()); let _ = db.upsert_guild(&cfg); respond_ephemeral(ctx, interaction, &format!("✅ Exempted <@&{rid}> — bypasses all checks\n*Dashboard: `/rosy dashboard` → see exempt count*")).await; return; } } } } }
+            if let Some(cmd_opt) = interaction.data.options.first() { if let serenity::all::CommandDataOptionValue::SubCommand(subs) = &cmd_opt.value { for s in subs { if s.name == "role" { if let serenity::all::CommandDataOptionValue::Role(rid) = &s.value { cfg.exempt_roles.insert(rid.get()); let _ = db.upsert_guild(&cfg); respond_ephemeral(ctx, interaction, &format!("✅ Exempted <@&{rid}> — bypasses all checks\n*Dashboard: `/rosy dashboard` → see exempt count*")).await; return; } } } } }
         }
         "exempt_channel" => {
             let mut cfg = db.get_guild(guild_id).unwrap_or_else(|_| crate::db::GuildConfig::new(guild_id));
-            if let Some(cmd_opt) = interaction.data.options.first() { if let Some(serenity::all::CommandDataOptionValue::SubCommand(subs)) = &cmd_opt.value { for s in subs { if s.name == "channel" { if let Some(serenity::all::CommandDataOptionValue::Channel(cid)) = &s.value { cfg.exempt_channels.insert(cid.get()); let _ = db.upsert_guild(&cfg); respond_ephemeral(ctx, interaction, &format!("✅ Exempted <#{cid}>\n*Dashboard: `/rosy dashboard`*")).await; return; } } } } }
+            if let Some(cmd_opt) = interaction.data.options.first() { if let serenity::all::CommandDataOptionValue::SubCommand(subs) = &cmd_opt.value { for s in subs { if s.name == "channel" { if let serenity::all::CommandDataOptionValue::Channel(cid) = &s.value { cfg.exempt_channels.insert(cid.get()); let _ = db.upsert_guild(&cfg); respond_ephemeral(ctx, interaction, &format!("✅ Exempted <#{cid}>\n*Dashboard: `/rosy dashboard`*")).await; return; } } } } }
         }
         "false_positive" | "allow_hash" => {
-            let (hash_opt, reason) = if let Some(cmd_opt) = interaction.data.options.first() { if let Some(serenity::all::CommandDataOptionValue::SubCommand(subs)) = &cmd_opt.value { let h = subs.iter().find(|s| s.name=="hash").and_then(|s| s.value.as_ref()).and_then(|v| if let serenity::all::CommandDataOptionValue::String(s)=v {Some(s.clone())} else {None}); let r = subs.iter().find(|s| s.name=="reason").and_then(|s| s.value.as_ref()).and_then(|v| if let serenity::all::CommandDataOptionValue::String(s)=v {Some(s.clone())} else {None}).unwrap_or_else(|| "false positive report".into()); (h, r) } else {(None, "false positive".into())} } else {(None, "false positive".into())};
+            let (hash_opt, reason) = if let Some(cmd_opt) = interaction.data.options.first() { if let serenity::all::CommandDataOptionValue::SubCommand(subs) = &cmd_opt.value { let h = subs.iter().find(|s| s.name=="hash").and_then(|s| if let serenity::all::CommandDataOptionValue::String(sv)=&s.value {Some(sv.clone())} else {None}); let r = subs.iter().find(|s| s.name=="reason").and_then(|s| if let serenity::all::CommandDataOptionValue::String(sv)=&s.value {Some(sv.clone())} else {None}).unwrap_or_else(|| "false positive report".into()); (h, r) } else {(None, "false positive".into())} } else {(None, "false positive".into())};
             if let Some(hash) = hash_opt { if !hash.is_empty() {
                 if hash.len() < 12 { respond_ephemeral(ctx, interaction, "❌ Hash too short — use full SHA256 from log or 12-char prefix.").await; return; }
                 let full_hash = hash.clone();
@@ -293,7 +293,7 @@ pub async fn handle_interaction(
         }
         _ => {
             if interaction.data.name == "rosy_test" {
-                let url = interaction.data.options.first().and_then(|o| o.value.as_ref()).and_then(|v| if let serenity::all::CommandDataOptionValue::String(s)=v {Some(s.clone())} else {None}).unwrap_or_default();
+                let url = interaction.data.options.first().and_then(|o| if let serenity::all::CommandDataOptionValue::String(s)=&o.value {Some(s.clone())} else {None}).unwrap_or_default();
                 let cfg = db.get_guild(guild_id).unwrap_or_else(|_| crate::db::GuildConfig::new(guild_id));
                 let fl = crate::filterlist::FilterLists::load_bundled();
                 let scanner = crate::moderation::link_scanner::LinkScanner::new(fl, cfg.allowed_domains, cfg.block_invites.unwrap_or(true));
@@ -452,38 +452,31 @@ async fn handle_video(ctx: &serenity::prelude::Context, interaction: &serenity::
 
 fn get_sub_options(interaction: &serenity::all::CommandInteraction) -> Vec<(String, serenity::all::CommandDataOptionValue)> {
     interaction.data.options.first()
-        .and_then(|o| o.value.as_ref())
-        .and_then(|v| if let serenity::all::CommandDataOptionValue::SubCommand(subs) = v { Some(subs) } else { None })
-        .map(|subs| subs.iter().filter_map(|s| s.value.as_ref().map(|v| (s.name.clone(), v.clone()))).collect())
+        .and_then(|o| if let serenity::all::CommandDataOptionValue::SubCommand(subs) = &o.value { Some(subs) } else { None })
+        .map(|subs| subs.iter().map(|s| (s.name.clone(), s.value.clone())).collect())
         .unwrap_or_default()
 }
 
 fn get_string_sub_option(interaction: &serenity::all::CommandInteraction, name: &str) -> String {
     interaction.data.options.first()
-        .and_then(|o| o.value.as_ref())
-        .and_then(|v| if let serenity::all::CommandDataOptionValue::SubCommand(subs) = v { Some(subs) } else { None })
+        .and_then(|o| if let serenity::all::CommandDataOptionValue::SubCommand(subs) = &o.value { Some(subs) } else { None })
         .and_then(|subs| subs.iter().find(|s| s.name == name))
-        .and_then(|s| s.value.as_ref())
-        .and_then(|v| if let serenity::all::CommandDataOptionValue::String(s) = v { Some(s.clone()) } else { None })
+        .and_then(|s| if let serenity::all::CommandDataOptionValue::String(sv) = &s.value { Some(sv.clone()) } else { None })
         .unwrap_or_default()
 }
 
 fn get_bool_sub_option(interaction: &serenity::all::CommandInteraction, name: &str) -> Option<bool> {
     interaction.data.options.first()
-        .and_then(|o| o.value.as_ref())
-        .and_then(|v| if let serenity::all::CommandDataOptionValue::SubCommand(subs) = v { Some(subs) } else { None })
+        .and_then(|o| if let serenity::all::CommandDataOptionValue::SubCommand(subs) = &o.value { Some(subs) } else { None })
         .and_then(|subs| subs.iter().find(|s| s.name == name))
-        .and_then(|s| s.value.as_ref())
-        .and_then(|v| if let serenity::all::CommandDataOptionValue::Boolean(b) = v { Some(*b) } else { None })
+        .and_then(|s| if let serenity::all::CommandDataOptionValue::Boolean(b) = &s.value { Some(*b) } else { None })
 }
 
 fn get_number_sub_option(interaction: &serenity::all::CommandInteraction, name: &str) -> Option<f64> {
     interaction.data.options.first()
-        .and_then(|o| o.value.as_ref())
-        .and_then(|v| if let serenity::all::CommandDataOptionValue::SubCommand(subs) = v { Some(subs) } else { None })
+        .and_then(|o| if let serenity::all::CommandDataOptionValue::SubCommand(subs) = &o.value { Some(subs) } else { None })
         .and_then(|subs| subs.iter().find(|s| s.name == name))
-        .and_then(|s| s.value.as_ref())
-        .and_then(|v| if let serenity::all::CommandDataOptionValue::Number(n) = v { Some(*n) } else { None })
+        .and_then(|s| if let serenity::all::CommandDataOptionValue::Number(n) = &s.value { Some(*n) } else { None })
 }
 
 async fn respond_ephemeral(ctx: &serenity::prelude::Context, interaction: &serenity::all::CommandInteraction, content: &str) {

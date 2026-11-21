@@ -64,34 +64,34 @@ pub fn build_dashboard_embed(guild_id: u64, cfg: &GuildConfig, global_nsfw: f32,
 pub fn dashboard_components(disabled: bool) -> Vec<CreateActionRow> {
     vec![
         CreateActionRow::Buttons(vec![
-            CreateButton::new("rosy_toggle_nsfw").label("NSFW Filter").emoji("🔞".into()).style(serenity::all::ButtonStyle::Primary).disabled(disabled),
-            CreateButton::new("rosy_toggle_gore").label("Gore Filter").emoji("🩸".into()).style(serenity::all::ButtonStyle::Danger).disabled(disabled),
-            CreateButton::new("rosy_toggle_tor").label("Tor/Proxy").emoji("🧅".into()).style(serenity::all::ButtonStyle::Secondary).disabled(disabled),
-            CreateButton::new("rosy_toggle_sus").label("Cheap-Sus TLD").emoji("⚠️".into()).style(serenity::all::ButtonStyle::Secondary).disabled(disabled),
+            CreateButton::new("rosy_toggle_nsfw").label("NSFW Filter").emoji(serenity::all::ReactionType::Unicode("🔞".to_owned())).style(serenity::all::ButtonStyle::Primary).disabled(disabled),
+            CreateButton::new("rosy_toggle_gore").label("Gore Filter").emoji(serenity::all::ReactionType::Unicode("🩸".to_owned())).style(serenity::all::ButtonStyle::Danger).disabled(disabled),
+            CreateButton::new("rosy_toggle_tor").label("Tor/Proxy").emoji(serenity::all::ReactionType::Unicode("🧅".to_owned())).style(serenity::all::ButtonStyle::Secondary).disabled(disabled),
+            CreateButton::new("rosy_toggle_sus").label("Cheap-Sus TLD").emoji(serenity::all::ReactionType::Unicode("⚠️".to_owned())).style(serenity::all::ButtonStyle::Secondary).disabled(disabled),
         ]),
         CreateActionRow::Buttons(vec![
-            CreateButton::new("rosy_toggle_invites").label("Invites").emoji("📨".into()).style(serenity::all::ButtonStyle::Secondary).disabled(disabled),
-            CreateButton::new("rosy_toggle_nsfwch").label("Bypass NSFW-ch").emoji("🔓".into()).style(serenity::all::ButtonStyle::Secondary).disabled(disabled),
-            CreateButton::new("rosy_preset_balanced").label("Preset: Balanced").emoji("⚖".into()).style(serenity::all::ButtonStyle::Success).disabled(disabled),
-            CreateButton::new("rosy_help").label("Help").emoji("❓".into()).style(serenity::all::ButtonStyle::Secondary).disabled(disabled),
+            CreateButton::new("rosy_toggle_invites").label("Invites").emoji(serenity::all::ReactionType::Unicode("📨".to_owned())).style(serenity::all::ButtonStyle::Secondary).disabled(disabled),
+            CreateButton::new("rosy_toggle_nsfwch").label("Bypass NSFW-ch").emoji(serenity::all::ReactionType::Unicode("🔓".to_owned())).style(serenity::all::ButtonStyle::Secondary).disabled(disabled),
+            CreateButton::new("rosy_preset_balanced").label("Preset: Balanced").emoji(serenity::all::ReactionType::Unicode("⚖".to_owned())).style(serenity::all::ButtonStyle::Success).disabled(disabled),
+            CreateButton::new("rosy_help").label("Help").emoji(serenity::all::ReactionType::Unicode("❓".to_owned())).style(serenity::all::ButtonStyle::Secondary).disabled(disabled),
         ]),
         // Gender + Video row
         CreateActionRow::Buttons(vec![
-            CreateButton::new("rosy_toggle_gender_male").label("Male Filter").emoji("👨".into()).style(serenity::all::ButtonStyle::Secondary).disabled(disabled),
-            CreateButton::new("rosy_toggle_gender_female").label("Female Filter").emoji("👩".into()).style(serenity::all::ButtonStyle::Secondary).disabled(disabled),
-            CreateButton::new("rosy_toggle_video").label("Video Block").emoji("🎞".into()).style(serenity::all::ButtonStyle::Secondary).disabled(disabled),
-            CreateButton::new("rosy_gender_help").label("Per-Channel").emoji("🎛".into()).style(serenity::all::ButtonStyle::Primary).disabled(disabled),
+            CreateButton::new("rosy_toggle_gender_male").label("Male Filter").emoji(serenity::all::ReactionType::Unicode("👨".to_owned())).style(serenity::all::ButtonStyle::Secondary).disabled(disabled),
+            CreateButton::new("rosy_toggle_gender_female").label("Female Filter").emoji(serenity::all::ReactionType::Unicode("👩".to_owned())).style(serenity::all::ButtonStyle::Secondary).disabled(disabled),
+            CreateButton::new("rosy_toggle_video").label("Video Block").emoji(serenity::all::ReactionType::Unicode("🎞".to_owned())).style(serenity::all::ButtonStyle::Secondary).disabled(disabled),
+            CreateButton::new("rosy_gender_help").label("Per-Channel").emoji(serenity::all::ReactionType::Unicode("🎛".to_owned())).style(serenity::all::ButtonStyle::Primary).disabled(disabled),
         ]),
         CreateActionRow::SelectMenu(CreateSelectMenu::new(
             "rosy_threshold_select",
             serenity::all::CreateSelectMenuKind::String {
                 options: vec![
-                    CreateSelectMenuOption::new("NSFW 0.80 — Strict (more blocks)", "nsfw_0.80").description("Low threshold, catches more").emoji("🔞".into()),
-                    CreateSelectMenuOption::new("NSFW 0.85 — Balanced (recommended)", "nsfw_0.85").description("Default, good balance").emoji("⚖".into()).default_selection(true),
-                    CreateSelectMenuOption::new("NSFW 0.90 — Permissive (fewer false positives)", "nsfw_0.90").description("High threshold, fewer blocks").emoji("🌙".into()),
-                    CreateSelectMenuOption::new("Gore 0.80 — Strict", "gore_0.80").emoji("🩸".into()),
-                    CreateSelectMenuOption::new("Gore 0.85 — Balanced", "gore_0.85").emoji("⚖".into()),
-                    CreateSelectMenuOption::new("Gore 0.90 — Permissive", "gore_0.90").emoji("🌙".into()),
+                    CreateSelectMenuOption::new("NSFW 0.80 — Strict (more blocks)", "nsfw_0.80").description("Low threshold, catches more").emoji(serenity::all::ReactionType::Unicode("🔞".to_owned())),
+                    CreateSelectMenuOption::new("NSFW 0.85 — Balanced (recommended)", "nsfw_0.85").description("Default, good balance").emoji(serenity::all::ReactionType::Unicode("⚖".to_owned())).default_selection(true),
+                    CreateSelectMenuOption::new("NSFW 0.90 — Permissive (fewer false positives)", "nsfw_0.90").description("High threshold, fewer blocks").emoji(serenity::all::ReactionType::Unicode("🌙".to_owned())),
+                    CreateSelectMenuOption::new("Gore 0.80 — Strict", "gore_0.80").emoji(serenity::all::ReactionType::Unicode("🩸".to_owned())),
+                    CreateSelectMenuOption::new("Gore 0.85 — Balanced", "gore_0.85").emoji(serenity::all::ReactionType::Unicode("⚖".to_owned())),
+                    CreateSelectMenuOption::new("Gore 0.90 — Permissive", "gore_0.90").emoji(serenity::all::ReactionType::Unicode("🌙".to_owned())),
                 ],
             },
         ).placeholder("⚙️ Quick threshold presets — pick one").custom_id("rosy_threshold_select").disabled(disabled)),
@@ -108,9 +108,9 @@ pub fn preset_components() -> Vec<CreateActionRow> {
         "rosy_preset_pick",
         serenity::all::CreateSelectMenuKind::String {
             options: vec![
-                CreateSelectMenuOption::new("🛡️ Strict — max protection", "preset_strict").description("0.80 thr, Tor+Cheap on, 10m timeout, video on").emoji("🛡".into()),
-                CreateSelectMenuOption::new("⚖️ Balanced — recommended", "preset_balanced").description("0.85 thr, Tor+Cheap on, 5m timeout, video on").emoji("⚖".into()),
-                CreateSelectMenuOption::new("🌙 Permissive — minimal blocks", "preset_permissive").description("0.90 thr, Tor/Cheap off, no timeout, video off").emoji("🌙".into()),
+                CreateSelectMenuOption::new("🛡️ Strict — max protection", "preset_strict").description("0.80 thr, Tor+Cheap on, 10m timeout, video on").emoji(serenity::all::ReactionType::Unicode("🛡".to_owned())),
+                CreateSelectMenuOption::new("⚖️ Balanced — recommended", "preset_balanced").description("0.85 thr, Tor+Cheap on, 5m timeout, video on").emoji(serenity::all::ReactionType::Unicode("⚖".to_owned())),
+                CreateSelectMenuOption::new("🌙 Permissive — minimal blocks", "preset_permissive").description("0.90 thr, Tor/Cheap off, no timeout, video off").emoji(serenity::all::ReactionType::Unicode("🌙".to_owned())),
             ],
         },
     ).placeholder("Pick a preset to apply instantly").custom_id("rosy_preset_pick"))]
@@ -149,7 +149,7 @@ pub async fn send_dashboard(
     global_gore: f32,
     global_block_videos: bool,
     target: serenity::all::ChannelId,
-    as_followup: bool,
+    _as_followup: bool,
     interaction: Option<&serenity::all::CommandInteraction>,
 ) {
     let cfg = db.get_guild(guild_id).unwrap_or_else(|_| GuildConfig::new(guild_id));
